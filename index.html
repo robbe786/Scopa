@@ -10,17 +10,19 @@
     #camera-container { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
+    /* Box Tavolo verde: allargato all'88% per coprire 5 carte in orizzontale */
     #motion-zone {
       position: absolute;
       top: 30%;
-      left: 20%;
-      width: 60%;
+      left: 6%;
+      width: 88%;
       height: 25%;
       border: 2px dashed #22c55e;
       pointer-events: none;
       border-radius: 8px;
     }
 
+    /* Box Turno Hero: ampio per coprire le 3 carte in mano */
     #turn-zone {
       position: absolute;
       bottom: 8%;
@@ -95,7 +97,7 @@
     </div>
   </div>
 
-  <canvas id="motion-canvas" width="160" height="120" style="display:none;"></canvas>
+  <canvas id="motion-canvas" width="180" height="120" style="display:none;"></canvas>
   <canvas id="turn-canvas" width="80" height="80" style="display:none;"></canvas>
   <canvas id="capture-canvas" style="display:none;"></canvas>
 
@@ -192,9 +194,10 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
       setInterval(() => {
         if (isProcessing || video.videoWidth === 0) return;
 
-        const tw = video.videoWidth * 0.60;
+        // 1. ZONA TAVOLO VERDE ALLARGATA (88% larghezza per ospitare 5 carte)
+        const tw = video.videoWidth * 0.88;
         const th = video.videoHeight * 0.25;
-        const tx = video.videoWidth * 0.20;
+        const tx = video.videoWidth * 0.06;
         const ty = video.videoHeight * 0.30;
 
         mCtx.drawImage(video, tx, ty, tw, th, 0, 0, motionCanvas.width, motionCanvas.height);
@@ -208,7 +211,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
             if (Math.abs(d1[i] - d2[i]) + Math.abs(d1[i+1] - d2[i+1]) + Math.abs(d1[i+2] - d2[i+2]) > 80) diff++;
           }
 
-          if (diff > 25) {
+          if (diff > 30) {
             tableMotion = true;
             calmFrames = 0;
             heroTurnCooldown = false;
@@ -227,6 +230,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
         }
         prevTableData = curTable;
 
+        // 2. ZONA HERO (riquadro carte in mano)
         const hw = video.videoWidth * 0.65;
         const hh = video.videoHeight * 0.24;
         const hx = video.videoWidth * 0.175;
@@ -278,7 +282,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
         const promptText = `
         CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Inizio partita'} ]
         ${opponentLastSnapshot ? "- Scatto della giocata precedente registrata." : ""}
-        - Immagine corrente: carte a terra sul panno verde e mano di Hero in basso nel riquadro rosso.
+        - Immagine corrente: carte a terra sul panno verde (possono essere fino a 5 o più) e mano di Hero in basso nel riquadro rosso.
         Indica la carta consigliata e l'azione.
         `;
 
@@ -286,7 +290,6 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
         if (opponentLastSnapshot) parts.push({ inline_data: { mime_type: "image/jpeg", data: opponentLastSnapshot } });
         parts.push({ inline_data: { mime_type: "image/jpeg", data: currentFrameBase64 } });
 
-        // Endpoint aggiornato al modello richiesto: gemini-3.6-flash
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
