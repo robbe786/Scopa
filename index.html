@@ -1,27 +1,381 @@
-const SYSTEM_PROMPT = `Sei un bot imbattibile di Scopa 1vs1 su Sisal.it.
-Il tavolo usa il MAZZO CON CARTE A SEMI FRANCESI:
-- Semi: d=Quadri/Denari (rombi rossi), h=Cuori/Coppe (cuori rossi), s=Picche/Spade (foglia nera), c=Fiori/Bastoni (trifoglio nero).
-- Valori nominali per il gioco:
-  * Numeri da 1 (Asso) a 7.
-  * J = 8 (Fante).
-  * Q = 9 (Cavallo).
-  * K = 10 (Re).
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sisal Briscola 1vs1 Master</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: #121212; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    #camera-container { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    
+    /* Box Tavolo verde: carta giocata al centro */
+    #motion-zone {
+      position: absolute;
+      top: 28%;
+      left: 15%;
+      width: 70%;
+      height: 30%;
+      border: 2px dashed #22c55e;
+      pointer-events: none;
+      border-radius: 8px;
+    }
 
-DECODIFICA OTTICA:
-Leggi direttamente il NUMERO o la LETTERA presente nell'indice stampato in alto a sinistra/destra di ciascuna carta sia a terra che nella mano in basso.
+    /* Box Briscola: tallone laterale destro/sinistro su Sisal */
+    #briscola-zone {
+      position: absolute;
+      top: 15%;
+      right: 5%;
+      width: 25%;
+      height: 25%;
+      border: 2px dotted #38bdf8;
+      pointer-events: none;
+      border-radius: 6px;
+    }
 
-REGOLE TATTICHE:
-1. Punti: Settebello (7d / 7 Quadri), Primiera (tutti i 7, poi 6, poi Assi), Denari/Quadri (>=6 vincono), Carte totali (>=21), Scope.
-2. PRESA OBBLIGATORIA A CARTA SINGOLA: Se a terra c'è una carta dello stesso valore nominale della carta giocata, DEVI prendere quella singola e NON la somma.
-3. DIFESA SULLE SCOPE: Non lasciare mai somme totali o parziali <= 10 a terra.
-4. Traccia le 40 carte per dedurre l'endgame.
+    /* Box Turno Hero: le tue 3 carte in basso */
+    #turn-zone {
+      position: absolute;
+      bottom: 8%;
+      left: 17.5%;
+      width: 65%;
+      height: 24%;
+      border: 2px solid #ef4444;
+      pointer-events: none;
+      border-radius: 8px;
+      background: rgba(239, 68, 68, 0.12);
+    }
+    
+    #status-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(0,0,0,0.85);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid #444;
+      z-index: 10;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; }
+    .dot-motion { background: #eab308; }
+    .dot-hero { background: #ef4444; }
 
-Rispondi ESCLUSIVAMENTE in JSON senza backtick o testo di contorno:
+    #panel { flex: 0 0 auto; background: #1a1a1a; padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; z-index: 10; }
+    #decision { font-size: 1.7rem; font-weight: 900; text-align: center; color: #38bdf8; min-height: 2.1rem; }
+    #details { font-size: 0.85rem; color: #ccc; min-height: 2.8em; line-height: 1.4; }
+    
+    .btn-row { display: flex; gap: 8px; }
+    #btn-force { flex: 2; padding: 14px; font-size: 1rem; font-weight: bold; color: white; background: #2563eb; border: none; border-radius: 10px; cursor: pointer; }
+    #btn-force:disabled { background: #444; color: #888; }
+    #btn-reset { flex: 1; padding: 14px; font-size: 0.9rem; background: #374151; color: white; border: none; border-radius: 10px; cursor: pointer; }
+
+    #api-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 100; }
+    .modal-content { background: #222; padding: 20px; border-radius: 12px; width: 100%; max-width: 350px; border: 1px solid #333; }
+    .modal-content input { width: 100%; padding: 12px; margin: 12px 0; border-radius: 6px; border: 1px solid #444; background: #111; color: white; }
+    .modal-content button { width: 100%; padding: 12px; background: #2563eb; border: none; border-radius: 6px; color: white; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <div id="api-modal">
+    <div class="modal-content">
+      <h3>Gemini API Key</h3>
+      <input type="text" id="api-key-input" placeholder="Incolla chiave AIza...">
+      <button id="save-key-btn">Salva e Avvia</button>
+    </div>
+  </div>
+
+  <div id="camera-container">
+    <video id="video" autoplay playsinline muted></video>
+    <div id="motion-zone"></div>
+    <div id="briscola-zone"></div>
+    <div id="turn-zone"></div>
+    <div id="status-badge">
+      <div id="indicator" class="dot"></div>
+      <span id="batch-count">BRISCOLA MASTER ATTIVO</span>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div id="decision">IN ATTESA</div>
+    <div id="details">Tastierino: INVIO = Calcola Mossa | 0 = Nuova Smazzata</div>
+    <div class="btn-row">
+      <button id="btn-force">FORZA ANALISI (Invio)</button>
+      <button id="btn-reset">Nuova Partita (0)</button>
+    </div>
+  </div>
+
+  <canvas id="motion-canvas" width="180" height="120" style="display:none;"></canvas>
+  <canvas id="turn-canvas" width="80" height="80" style="display:none;"></canvas>
+  <canvas id="capture-canvas" style="display:none;"></canvas>
+
+  <script>
+    const SYSTEM_PROMPT = `Sei un maestro di Briscola 1vs1 su Sisal.it.
+Mazzo Francese (40 carte standard):
+- Semi: d=Quadri (rombo rosso), h=Cuori (cuore rosso), s=Picche (foglia nera), c=Fiori (trifoglio nero).
+- Gerarchia di presa e valore punti:
+  * Asso (1) = 11 pt
+  * Tre (3) = 10 pt
+  * Re (K / 10) = 4 pt
+  * Cavallo/Regina (Q / 9) = 3 pt
+  * Fante (J / 8) = 2 pt
+  * Lisci (7, 6, 5, 4, 2) = 0 pt
+
+REGOLE TATTICHE COGENTI BRISCOLA 1VS1:
+1. IDENTIFICAZIONE SEME DI BRISCOLA: Riconosci la carta scoperta sotto il mazzo del tallone.
+2. PRIMO DI MANO (Hero gioca per primo):
+   - Mai aprire con Carichi (Asso o 3) se non a mazzo esaurito.
+   - Mai aprire di Briscola secca.
+   - Gioca il liscio più basso (2, 4, 5) del seme non briscola più controllato.
+3. SECONDO DI MANO (Avversario ha già giocato la carta a terra):
+   - Se gioca un Liscio: non sprecare carichi né briscole. Butta un liscio per farlo rimanere di mano o supera con figura solo se conveniente.
+   - Se gioca un Carico (Asso o 3): taglia con Briscola piccola/media (se non puoi superare sul seme) per intascare 10-11 punti pesanti.
+   - Se gioca Briscola alta: scarta un liscio inutile (non regalare punti).
+4. CONTEGGIO PUNTI (Target: 61 punti per vincere):
+   - Tieni conto dei punti già accumulati e dei Carichi/Briscole rimasti nel tallone.
+   - All'esaurimento del tallone (ultime 3 mani), deduci con esattezza le 3 carte avversarie per forzare la chiusura.
+
+Rispondi ESCLUSIVAMENTE in JSON valido senza backtick o testo extra:
 {
-  "carta_consigliata": "es: 7d",
-  "azione": "Presa (es: Prende 7s) o Calata",
-  "motivo": "Spiegazione tattica",
-  "carte_mano_hero": ["es: 3c", "5h", "6c"],
-  "carte_tavolo": ["carte sul tavolo verde"],
-  "nuove_carte_uscite": ["carte uscite/prese in questo turno"]
+  "seme_briscola": "es: Cuori (h)",
+  "carta_consigliata": "es: 4s",
+  "azione": "Liscio di scarto OPPURE Presa di carico OPPURE Taglio con briscola",
+  "motivo": "Spiegazione tattica e gestione della mano",
+  "carte_mano_hero": ["carte lette in mano"],
+  "carta_avversario_tavolo": "carta calata dall'avversario o vuoto se siamo primi",
+  "nuove_carte_uscite": ["carte uscite in questo turno da scalare dalle 40"]
 }`;
+
+    let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
+    let carteUscite = [];
+    let opponentLastSnapshot = null;
+    let isProcessing = false;
+
+    const video = document.getElementById('video');
+    const motionCanvas = document.getElementById('motion-canvas');
+    const mCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+    const turnCanvas = document.getElementById('turn-canvas');
+    const tCtx = turnCanvas.getContext('2d', { willReadFrequently: true });
+    const captureCanvas = document.getElementById('capture-canvas');
+    const cCtx = captureCanvas.getContext('2d');
+
+    const btnForce = document.getElementById('btn-force');
+    const btnReset = document.getElementById('btn-reset');
+    const decisionEl = document.getElementById('decision');
+    const detailsEl = document.getElementById('details');
+    const batchCountEl = document.getElementById('batch-count');
+    const indicatorEl = document.getElementById('indicator');
+    const apiModal = document.getElementById('api-modal');
+
+    if (apiKey) {
+      apiModal.style.display = 'none';
+      initApp();
+    }
+
+    document.getElementById('save-key-btn').onclick = () => {
+      apiKey = document.getElementById('api-key-input').value.trim();
+      if (apiKey) {
+        localStorage.setItem('GEMINI_API_KEY', apiKey);
+        apiModal.style.display = 'none';
+        initApp();
+      }
+    };
+
+    function eseguiReset() {
+      carteUscite = [];
+      opponentLastSnapshot = null;
+      decisionEl.innerText = "NUOVA PARTITA";
+      detailsEl.innerText = "Conteggio 40 carte azzerato. Inquadra la briscola a terra.";
+      batchCountEl.innerText = "BRISCOLA MASTER ATTIVO";
+      indicatorEl.className = "dot";
+    }
+
+    btnReset.onclick = eseguiReset;
+
+    async function initApp() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } },
+          audio: false
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          startVisionLoop();
+        };
+      } catch (err) {
+        alert("Errore camera: " + err.message);
+      }
+    }
+
+    let prevTableData = null;
+    let prevHeroData = null;
+    let tableMotion = false;
+    let calmFrames = 0;
+    let heroTurnCooldown = false;
+
+    function startVisionLoop() {
+      setInterval(() => {
+        if (isProcessing || video.videoWidth === 0) return;
+
+        // 1. ZONA TAVOLO (carta giocata dall'avversario)
+        const tw = video.videoWidth * 0.70;
+        const th = video.videoHeight * 0.30;
+        const tx = video.videoWidth * 0.15;
+        const ty = video.videoHeight * 0.28;
+
+        mCtx.drawImage(video, tx, ty, tw, th, 0, 0, motionCanvas.width, motionCanvas.height);
+        const curTable = mCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
+
+        if (prevTableData) {
+          let diff = 0;
+          const d1 = prevTableData.data;
+          const d2 = curTable.data;
+          for (let i = 0; i < d1.length; i += 8) {
+            if (Math.abs(d1[i] - d2[i]) + Math.abs(d1[i+1] - d2[i+1]) + Math.abs(d1[i+2] - d2[i+2]) > 80) diff++;
+          }
+
+          if (diff > 30) {
+            tableMotion = true;
+            calmFrames = 0;
+            heroTurnCooldown = false;
+            indicatorEl.className = "dot dot-motion";
+            batchCountEl.innerText = "Avversario cala...";
+          } else if (tableMotion) {
+            calmFrames++;
+            if (calmFrames >= 3) {
+              catturaFrameAvversario();
+              tableMotion = false;
+              calmFrames = 0;
+              indicatorEl.className = "dot";
+              batchCountEl.innerText = "Carta avversario a terra";
+            }
+          }
+        }
+        prevTableData = curTable;
+
+        // 2. ZONA HERO (alzata carte di Hero)
+        const hw = video.videoWidth * 0.65;
+        const hh = video.videoHeight * 0.24;
+        const hx = video.videoWidth * 0.175;
+        const hy = video.videoHeight * 0.68;
+
+        tCtx.drawImage(video, hx, hy, hw, hh, 0, 0, turnCanvas.width, turnCanvas.height);
+        const curHero = tCtx.getImageData(0, 0, turnCanvas.width, turnCanvas.height);
+
+        if (prevHeroData && !tableMotion && !heroTurnCooldown) {
+          let heroDiff = 0;
+          const hd1 = prevHeroData.data;
+          const hd2 = curHero.data;
+          for (let j = 0; j < hd1.length; j += 4) {
+            if (Math.abs(hd1[j] - hd2[j]) + Math.abs(hd1[j+1] - hd2[j+1]) + Math.abs(hd1[j+2] - hd2[j+2]) > 90) heroDiff++;
+          }
+
+          if (heroDiff > 45) {
+            heroTurnCooldown = true;
+            indicatorEl.className = "dot dot-hero";
+            batchCountEl.innerText = "Tocca a te! Calcolo...";
+            eseguiChiamataAI();
+          }
+        }
+        prevHeroData = curHero;
+
+      }, 250);
+    }
+
+    function catturaFrameAvversario() {
+      captureCanvas.width = 1280;
+      captureCanvas.height = 720;
+      cCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+      opponentLastSnapshot = captureCanvas.toDataURL('image/jpeg', 0.80).split(',')[1];
+    }
+
+    async function eseguiChiamataAI() {
+      if (!apiKey || isProcessing) return;
+
+      isProcessing = true;
+      btnForce.disabled = true;
+      decisionEl.innerText = "CALCOLO BRISCOLA...";
+
+      try {
+        captureCanvas.width = 1920;
+        captureCanvas.height = 1080;
+        cCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+        const currentFrameBase64 = captureCanvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+
+        const promptText = `
+        CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Inizio partita'} ]
+        ${opponentLastSnapshot ? "- Scatto della carta giocata dall'avversario a terra." : ""}
+        - Immagine attuale: mostra la Briscola scoperta sotto il mazzo, la carta a terra (se presente) e la mano di Hero in basso.
+        Fornisci la carta ottimale da giocare e spiega il calcolo del vantaggio.
+        `;
+
+        const parts = [{ text: promptText }];
+        if (opponentLastSnapshot) parts.push({ inline_data: { mime_type: "image/jpeg", data: opponentLastSnapshot } });
+        parts.push({ inline_data: { mime_type: "image/jpeg", data: currentFrameBase64 } });
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: parts }],
+            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            generationConfig: { response_mime_type: "application/json", temperature: 0.05 }
+          })
+        });
+
+        const resData = await response.json();
+        if (resData.error) throw new Error(resData.error.message);
+
+        const parsed = JSON.parse(resData.candidates[0].content.parts[0].text);
+
+        decisionEl.innerText = `${parsed.carta_consigliata} ➜ ${parsed.azione}`;
+        detailsEl.innerHTML = `
+          • <b>Briscola:</b> ${parsed.seme_briscola || '-'}<br>
+          • <b>Mano:</b> [ ${parsed.carte_mano_hero ? parsed.carte_mano_hero.join(' ') : '-'} ] | <b>A terra:</b> ${parsed.carta_avversario_tavolo || 'Nessuna (Sei primo)'}<br>
+          • <b>Tattica:</b> ${parsed.motivo} (Uscite: ${carteUscite.length + (parsed.nuove_carte_uscite ? parsed.nuove_carte_uscite.length : 0)}/40)
+        `;
+
+        if (parsed.nuove_carte_uscite && Array.isArray(parsed.nuove_carte_uscite)) {
+          carteUscite.push(...parsed.nuove_carte_uscite);
+        }
+
+        opponentLastSnapshot = null;
+
+      } catch (err) {
+        decisionEl.innerText = "ERRORE";
+        detailsEl.innerText = err.message;
+      } finally {
+        isProcessing = false;
+        btnForce.disabled = false;
+        batchCountEl.innerText = "BRISCOLA MASTER ATTIVO";
+      }
+    }
+
+    btnForce.onclick = () => {
+      if (!isProcessing) eseguiChiamataAI();
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (['Enter', 'NumpadEnter', 'Space', ' '].includes(e.code) || e.key === 'Enter') {
+        e.preventDefault();
+        if (!isProcessing) eseguiChiamataAI();
+      }
+      else if (e.code === 'Numpad0' || e.code === 'Digit0' || e.key === '0') {
+        e.preventDefault();
+        eseguiReset();
+      }
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !isProcessing) {
+        eseguiChiamataAI();
+      }
+    });
+  </script>
+</body>
+</html>
