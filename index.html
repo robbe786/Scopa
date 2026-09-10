@@ -10,33 +10,36 @@
     #camera-container { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Box 1: Centro tavolo Sisal (rilevamento giocata) */
+    /* Box Tavolo: centrato solo sulle carte a terra Sisal (esclude avversario sopra) */
     #motion-zone {
       position: absolute;
+      top: 36%;
+      left: 20%;
+      width: 60%;
+      height: 25%;
       border: 2px dashed #22c55e;
-      width: 70%;
-      height: 38%;
       pointer-events: none;
       border-radius: 8px;
     }
 
-    /* Box 2: Zona timer / Cuore rosso Hero in basso */
+    /* Box Turno Hero: posizionato esattamente sopra le tue 3 carte in basso */
     #turn-zone {
       position: absolute;
-      bottom: 6%;
+      bottom: 12%;
+      left: 25%;
+      width: 50%;
+      height: 12%;
       border: 2px solid #ef4444;
-      width: 25%;
-      height: 10%;
       pointer-events: none;
       border-radius: 6px;
-      background: rgba(239, 68, 68, 0.15);
+      background: rgba(239, 68, 68, 0.12);
     }
     
     #status-badge {
       position: absolute;
       top: 12px;
       left: 12px;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.85);
       padding: 6px 14px;
       border-radius: 20px;
       font-size: 0.8rem;
@@ -44,17 +47,19 @@
       align-items: center;
       gap: 8px;
       border: 1px solid #444;
+      z-index: 10;
     }
     .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; }
     .dot-motion { background: #eab308; }
     .dot-hero { background: #ef4444; }
 
-    #panel { flex: 0 0 auto; background: #1a1a1a; padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; }
+    #panel { flex: 0 0 auto; background: #1a1a1a; padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; z-index: 10; }
     #decision { font-size: 1.7rem; font-weight: 900; text-align: center; color: #38bdf8; min-height: 2.1rem; }
     #details { font-size: 0.85rem; color: #ccc; min-height: 2.8em; line-height: 1.4; }
     
     .btn-row { display: flex; gap: 8px; }
-    #btn-mode { flex: 2; padding: 14px; font-size: 1rem; font-weight: bold; color: white; background: #10b981; border: none; border-radius: 10px; cursor: pointer; }
+    #btn-force { flex: 2; padding: 14px; font-size: 1rem; font-weight: bold; color: white; background: #2563eb; border: none; border-radius: 10px; cursor: pointer; }
+    #btn-force:disabled { background: #444; color: #888; }
     #btn-reset { flex: 1; padding: 14px; font-size: 0.9rem; background: #374151; color: white; border: none; border-radius: 10px; cursor: pointer; }
 
     #api-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 100; }
@@ -79,49 +84,49 @@
     <div id="turn-zone"></div>
     <div id="status-badge">
       <div id="indicator" class="dot"></div>
-      <span id="batch-count">AUTOPILOT ATTIVO</span>
+      <span id="batch-count">AUTOPILOT PRONTO</span>
     </div>
   </div>
 
   <div id="panel">
-    <div id="decision">IN ATTESA DEL TURNO</div>
-    <div id="details">Allinea il box rosso sul cuore/timer in basso. Giocherà da solo a ogni tuo turno.</div>
+    <div id="decision">IN ATTESA</div>
+    <div id="details">Inquadra il panno centrale nel verde e le tue 3 carte nel rosso.</div>
     <div class="btn-row">
-      <button id="btn-mode">Auto: ON</button>
-      <button id="btn-reset">Nuova Smazzata</button>
+      <button id="btn-force">FORZA ANALISI (O Spazio)</button>
+      <button id="btn-reset">Nuova Mano</button>
     </div>
   </div>
 
   <canvas id="motion-canvas" width="160" height="120" style="display:none;"></canvas>
-  <canvas id="turn-canvas" width="40" height="40" style="display:none;"></canvas>
+  <canvas id="turn-canvas" width="60" height="60" style="display:none;"></canvas>
   <canvas id="capture-canvas" style="display:none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un bot imbattibile di Scopa classica 1vs1 su Sisal.it.
-Mazzo: NAPOLETANO REGIONALE (d=Denari/Ori, c=Coppe, s=Spade, b=Bastoni. Valori da 1 a 7, 8=Fante, 9=Cavallo, 10=Re).
-Tavolo verde centrale + mano di Hero in basso.
+    const SYSTEM_PROMPT = `Sei un bot imbattibile di Scopa 1vs1 su Sisal.it.
+Mazzo: Napoletano regionale tradizionale.
+Semi: d=Denari/Ori, c=Coppe, s=Spade, b=Bastoni.
+Valori: 1 ad 7, 8=Fante, 9=Cavallo, 10=Re.
 
 REGOLE TATTICHE:
 1. Punti: Settebello (7d), Primiera (tutti i 7 e 6), Denari (>=6 vincono), Carte totali (>=21), Scope.
-2. PRESA OBBLIGATORIA A CARTA SINGOLA: Se c'è una carta a terra di valore nominale uguale, obbligo di prendere quella e non la combinazione.
-3. DIFESA RIGOROSA: Non lasciare mai somme totali o parziali <= 10 facilmente accoppiabili, a meno di conteggio sicuro.
-4. MEMORIA FERREA: Usa lo storico per sapere quali carte restano nel mazzo e in mano all'avversario.
+2. PRESA OBBLIGATORIA A CARTA SINGOLA: Se a terra c'è una carta con valore nominale identico a quella giocata, DEVI prendere quella e non la combinazione di somma.
+3. DIFESA SULLE SCOPE: Non lasciare a terra somme totali o parziali <= 10 facilmente accoppiabili.
+4. Traccia le 40 carte uscite per calcolare con certezza l'endgame.
 
-Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
+Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
 {
-  "carta_consigliata": "es: 7d",
-  "azione": "Presa (es: Prende 7s) o Calata",
+  "carta_consigliata": "es: 1s",
+  "azione": "Presa (es: Prende 1s a terra) oppure Calata",
   "motivo": "Spiegazione tattica",
-  "carte_mano_hero": ["es: 7d", "2c"],
-  "carte_tavolo": ["carte a terra"],
-  "nuove_carte_uscite": ["carte uscite/prese in questa giocata"]
+  "carte_mano_hero": ["es: 1s", "3c", "8c"],
+  "carte_tavolo": ["carte a terra sul panno verde"],
+  "nuove_carte_uscite": ["carte uscite/prese in questo turno"]
 }`;
 
     let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
     let carteUscite = [];
     let opponentLastSnapshot = null;
     let isProcessing = false;
-    let autoMode = true;
 
     const video = document.getElementById('video');
     const motionCanvas = document.getElementById('motion-canvas');
@@ -131,7 +136,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
     const captureCanvas = document.getElementById('capture-canvas');
     const cCtx = captureCanvas.getContext('2d');
 
-    const btnMode = document.getElementById('btn-mode');
+    const btnForce = document.getElementById('btn-force');
     const btnReset = document.getElementById('btn-reset');
     const decisionEl = document.getElementById('decision');
     const detailsEl = document.getElementById('details');
@@ -153,18 +158,12 @@ Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
       }
     };
 
-    btnMode.onclick = () => {
-      autoMode = !autoMode;
-      btnMode.innerText = autoMode ? "Auto: ON" : "Auto: PAUSA";
-      btnMode.style.background = autoMode ? "#10b981" : "#4b5563";
-    };
-
     btnReset.onclick = () => {
       carteUscite = [];
       opponentLastSnapshot = null;
       decisionEl.innerText = "NUOVA SMAZZATA";
-      detailsEl.innerText = "Contatore 40 carte resettato. In attesa del primo giro.";
-      batchCountEl.innerText = "AUTOPILOT ATTIVO";
+      detailsEl.innerText = "Storico resettato. In attesa della prima mano.";
+      batchCountEl.innerText = "AUTOPILOT PRONTO";
       indicatorEl.className = "dot";
     };
 
@@ -179,106 +178,101 @@ Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
           startVisionLoop();
         };
       } catch (err) {
-        alert("Errore fotocamera: " + err.message);
+        alert("Errore camera: " + err.message);
       }
     }
 
     // ==========================================
-    // VISION LOOP AUTOMATICO (Motion + Hero Turn)
+    // LOOP CONTINUO DI VISIONE E RILEVAMENTO
     // ==========================================
-    let prevImageData = null;
-    let motionDetected = false;
-    let calmFramesCount = 0;
-    let turnTriggeredForThisCycle = false;
+    let prevTableData = null;
+    let prevHeroData = null;
+    let tableMotion = false;
+    let calmFrames = 0;
+    let heroTurnCooldown = false;
 
     function startVisionLoop() {
       setInterval(() => {
-        if (!autoMode || isProcessing || video.videoWidth === 0) return;
+        if (isProcessing || video.videoWidth === 0) return;
 
-        // 1. Rilevamento movimento al centro tavolo (Giocata avversario)
-        const sw = video.videoWidth * 0.70;
-        const sh = video.videoHeight * 0.38;
-        const sx = (video.videoWidth - sw) / 2;
-        const sy = (video.videoHeight - sh) / 2;
+        // 1. ZONA TAVOLO (36% top, altezza 25% - solo carte a terra)
+        const tw = video.videoWidth * 0.60;
+        const th = video.videoHeight * 0.25;
+        const tx = video.videoWidth * 0.20;
+        const ty = video.videoHeight * 0.36;
 
-        mCtx.drawImage(video, sx, sy, sw, sh, 0, 0, motionCanvas.width, motionCanvas.height);
-        const current = mCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
+        mCtx.drawImage(video, tx, ty, tw, th, 0, 0, motionCanvas.width, motionCanvas.height);
+        const curTable = mCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
 
-        if (prevImageData) {
-          let diffScore = 0;
-          const d1 = prevImageData.data;
-          const d2 = current.data;
-          
+        if (prevTableData) {
+          let diff = 0;
+          const d1 = prevTableData.data;
+          const d2 = curTable.data;
           for (let i = 0; i < d1.length; i += 8) {
-            const diff = Math.abs(d1[i] - d2[i]) + Math.abs(d1[i+1] - d2[i+1]) + Math.abs(d1[i+2] - d2[i+2]);
-            if (diff > 80) diffScore++;
+            if (Math.abs(d1[i] - d2[i]) + Math.abs(d1[i+1] - d2[i+1]) + Math.abs(d1[i+2] - d2[i+2]) > 80) diff++;
           }
 
-          if (diffScore > 28) {
-            motionDetected = true;
-            calmFramesCount = 0;
-            turnTriggeredForThisCycle = false; // Nuovo giro partito
+          if (diff > 25) {
+            tableMotion = true;
+            calmFrames = 0;
+            heroTurnCooldown = false;
             indicatorEl.className = "dot dot-motion";
-            batchCountEl.innerText = "Avversario sta giocando...";
-          } else if (motionDetected) {
-            calmFramesCount++;
-            if (calmFramesCount >= 4) { // Animazione finita
+            batchCountEl.innerText = "Avversario gioca...";
+          } else if (tableMotion) {
+            calmFrames++;
+            if (calmFrames >= 3) {
               catturaFrameAvversario();
-              motionDetected = false;
-              calmFramesCount = 0;
+              tableMotion = false;
+              calmFrames = 0;
               indicatorEl.className = "dot";
-              batchCountEl.innerText = "In attesa tuo turno...";
+              batchCountEl.innerText = "Tavolo fermo";
             }
           }
         }
-        prevImageData = current;
+        prevTableData = curTable;
 
-        // 2. Rilevamento colore rosso/attivo sul Cuore/Timer di Hero in basso
-        if (!motionDetected && !turnTriggeredForThisCycle) {
-          const tw = video.videoWidth * 0.25;
-          const th = video.videoHeight * 0.10;
-          const tx = (video.videoWidth - tw) / 2;
-          const ty = video.videoHeight * 0.84; // Posizione del timer di Sisal
+        // 2. ZONA HERO (rilevamento alzata carte di Hero al tuo turno)
+        const hw = video.videoWidth * 0.50;
+        const hh = video.videoHeight * 0.12;
+        const hx = video.videoWidth * 0.25;
+        const hy = video.videoHeight * 0.76;
 
-          tCtx.drawImage(video, tx, ty, tw, th, 0, 0, turnCanvas.width, turnCanvas.height);
-          const turnData = tCtx.getImageData(0, 0, turnCanvas.width, turnCanvas.height).data;
+        tCtx.drawImage(video, hx, hy, hw, hh, 0, 0, turnCanvas.width, turnCanvas.height);
+        const curHero = tCtx.getImageData(0, 0, turnCanvas.width, turnCanvas.height);
 
-          let redPixels = 0;
-          for (let i = 0; i < turnData.length; i += 4) {
-            const r = turnData[i];
-            const g = turnData[i+1];
-            const b = turnData[i+2];
-            // Riconosce il rosso acceso del cuore/timer di Sisal
-            if (r > 150 && g < 70 && b < 70) {
-              redPixels++;
-            }
+        if (prevHeroData && !tableMotion && !heroTurnCooldown) {
+          let heroDiff = 0;
+          const hd1 = prevHeroData.data;
+          const hd2 = curHero.data;
+          for (let j = 0; j < hd1.length; j += 4) {
+            if (Math.abs(hd1[j] - hd2[j]) + Math.abs(hd1[j+1] - hd2[j+1]) + Math.abs(hd1[j+2] - hd2[j+2]) > 90) heroDiff++;
           }
 
-          // Se il cuore rosso è attivo a schermo, tocca a te!
-          if (redPixels > 15) {
-            turnTriggeredForThisCycle = true;
+          // Lo scatto delle carte che si alzano attiva l'AI
+          if (heroDiff > 35) {
+            heroTurnCooldown = true;
             indicatorEl.className = "dot dot-hero";
-            batchCountEl.innerText = "Tocca a te! Elaborazione...";
+            batchCountEl.innerText = "Tocca a te! Calcolo...";
             eseguiChiamataAI();
           }
         }
-      }, 200);
+        prevHeroData = curHero;
+
+      }, 250);
     }
 
     function catturaFrameAvversario() {
       captureCanvas.width = 1280;
       captureCanvas.height = 720;
       cCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-      opponentLastSnapshot = captureCanvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      opponentLastSnapshot = captureCanvas.toDataURL('image/jpeg', 0.75).split(',')[1];
     }
 
-    // ==========================================
-    // CHIAMATA API A ZERO CLICK
-    // ==========================================
     async function eseguiChiamataAI() {
       if (!apiKey || isProcessing) return;
 
       isProcessing = true;
+      btnForce.disabled = true;
       decisionEl.innerText = "CALCOLO...";
 
       try {
@@ -288,16 +282,14 @@ Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
         const currentFrameBase64 = captureCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
         const promptText = `
-        CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Inizio partita'} ]
-        ${opponentLastSnapshot ? "- C'è lo scatto dell'azione avversaria registrata prima di questo turno." : ""}
-        - Immagine corrente: la mia mano in basso e il panno verde centrale.
-        Cosa devo giocare subito?
+        CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Nessuna, inizio partita'} ]
+        ${opponentLastSnapshot ? "- C'è lo scatto dell'azione avversaria precedente." : ""}
+        - Immagine corrente: carte a terra sul panno verde e mano di Hero in basso.
+        Cosa devo giocare adesso?
         `;
 
         const parts = [{ text: promptText }];
-        if (opponentLastSnapshot) {
-          parts.push({ inline_data: { mime_type: "image/jpeg", data: opponentLastSnapshot } });
-        }
+        if (opponentLastSnapshot) parts.push({ inline_data: { mime_type: "image/jpeg", data: opponentLastSnapshot } });
         parts.push({ inline_data: { mime_type: "image/jpeg", data: currentFrameBase64 } });
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
@@ -306,10 +298,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
           body: JSON.stringify({
             contents: [{ role: "user", parts: parts }],
             system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            generationConfig: {
-              response_mime_type: "application/json",
-              temperature: 0.1
-            }
+            generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
           })
         });
 
@@ -320,9 +309,9 @@ Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
 
         decisionEl.innerText = `${parsed.carta_consigliata} ➜ ${parsed.azione}`;
         detailsEl.innerHTML = `
-          • <b>Tattica:</b> ${parsed.motivo}<br>
           • <b>Mano:</b> [ ${parsed.carte_mano_hero ? parsed.carte_mano_hero.join(' ') : '-'} ]<br>
-          • <b>Tavolo:</b> [ ${parsed.carte_tavolo ? parsed.carte_tavolo.join(' ') : '-'} ] | Uscite: ${carteUscite.length + (parsed.nuove_carte_uscite ? parsed.nuove_carte_uscite.length : 0)}/40
+          • <b>Tavolo:</b> [ ${parsed.carte_tavolo ? parsed.carte_tavolo.join(' ') : '-'} ]<br>
+          • <b>Tattica:</b> ${parsed.motivo} (Uscite: ${carteUscite.length + (parsed.nuove_carte_uscite ? parsed.nuove_carte_uscite.length : 0)}/40)
         `;
 
         if (parsed.nuove_carte_uscite && Array.isArray(parsed.nuove_carte_uscite)) {
@@ -336,9 +325,27 @@ Rispondi ESCLUSIVAMENTE in JSON senza markdown o backtick:
         detailsEl.innerText = err.message;
       } finally {
         isProcessing = false;
-        batchCountEl.innerText = "AUTOPILOT ATTIVO";
+        btnForce.disabled = false;
+        batchCountEl.innerText = "AUTOPILOT PRONTO";
       }
     }
+
+    btnForce.onclick = () => {
+      if (!isProcessing) eseguiChiamataAI();
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (['Space', 'Enter'].includes(e.code) && !isProcessing) {
+        e.preventDefault();
+        eseguiChiamataAI();
+      }
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !isProcessing) {
+        eseguiChiamataAI();
+      }
+    });
   </script>
 </body>
 </html>
