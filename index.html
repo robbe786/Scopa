@@ -10,10 +10,10 @@
     #camera-container { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Box Tavolo verde: carta giocata al centro */
+    /* Box Tavolo verde: spostato più in alto (top: 22%) */
     #motion-zone {
       position: absolute;
-      top: 28%;
+      top: 22%;
       left: 15%;
       width: 70%;
       height: 30%;
@@ -22,11 +22,11 @@
       border-radius: 8px;
     }
 
-    /* Box Briscola: tallone laterale destro/sinistro su Sisal */
+    /* Box Briscola blu: più in alto (top: 10%) e più a destra (right: 2%) */
     #briscola-zone {
       position: absolute;
-      top: 15%;
-      right: 5%;
+      top: 10%;
+      right: 2%;
       width: 25%;
       height: 25%;
       border: 2px dotted #38bdf8;
@@ -34,13 +34,13 @@
       border-radius: 6px;
     }
 
-    /* Box Turno Hero: le tue 3 carte in basso */
+    /* Box Turno Hero rosso: allargato in verticale al 28% */
     #turn-zone {
       position: absolute;
-      bottom: 8%;
+      bottom: 5%;
       left: 17.5%;
       width: 65%;
-      height: 24%;
+      height: 28%;
       border: 2px solid #ef4444;
       pointer-events: none;
       border-radius: 8px;
@@ -127,7 +127,7 @@ Mazzo Francese (40 carte standard):
   * Lisci (7, 6, 5, 4, 2) = 0 pt
 
 REGOLE TATTICHE COGENTI BRISCOLA 1VS1:
-1. IDENTIFICAZIONE SEME DI BRISCOLA: Riconosci la carta scoperta sotto il mazzo del tallone.
+1. IDENTIFICAZIONE SEME DI BRISCOLA: Riconosci la carta scoperta sotto il mazzo del tallone (box in alto a destra).
 2. PRIMO DI MANO (Hero gioca per primo):
    - Mai aprire con Carichi (Asso o 3) se non a mazzo esaurito.
    - Mai aprire di Briscola secca.
@@ -222,11 +222,11 @@ Rispondi ESCLUSIVAMENTE in JSON valido senza backtick o testo extra:
       setInterval(() => {
         if (isProcessing || video.videoWidth === 0) return;
 
-        // 1. ZONA TAVOLO (carta giocata dall'avversario)
+        // 1. ZONA TAVOLO (spostata più in alto: top 22%)
         const tw = video.videoWidth * 0.70;
         const th = video.videoHeight * 0.30;
         const tx = video.videoWidth * 0.15;
-        const ty = video.videoHeight * 0.28;
+        const ty = video.videoHeight * 0.22;
 
         mCtx.drawImage(video, tx, ty, tw, th, 0, 0, motionCanvas.width, motionCanvas.height);
         const curTable = mCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
@@ -258,11 +258,11 @@ Rispondi ESCLUSIVAMENTE in JSON valido senza backtick o testo extra:
         }
         prevTableData = curTable;
 
-        // 2. ZONA HERO (alzata carte di Hero)
+        // 2. ZONA HERO (altezza aumentata a 28%, bottom 5%)
         const hw = video.videoWidth * 0.65;
-        const hh = video.videoHeight * 0.24;
+        const hh = video.videoHeight * 0.28;
         const hx = video.videoWidth * 0.175;
-        const hy = video.videoHeight * 0.68;
+        const hy = video.videoHeight * 0.67;
 
         tCtx.drawImage(video, hx, hy, hw, hh, 0, 0, turnCanvas.width, turnCanvas.height);
         const curHero = tCtx.getImageData(0, 0, turnCanvas.width, turnCanvas.height);
@@ -310,7 +310,7 @@ Rispondi ESCLUSIVAMENTE in JSON valido senza backtick o testo extra:
         const promptText = `
         CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Inizio partita'} ]
         ${opponentLastSnapshot ? "- Scatto della carta giocata dall'avversario a terra." : ""}
-        - Immagine attuale: mostra la Briscola scoperta sotto il mazzo, la carta a terra (se presente) e la mano di Hero in basso.
+        - Immagine attuale: mostra la Briscola scoperta sotto il mazzo (box in alto a destra), la carta a terra (se presente) e la mano di Hero in basso.
         Fornisci la carta ottimale da giocare e spiega il calcolo del vantaggio.
         `;
 
