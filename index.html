@@ -10,13 +10,13 @@
     #camera-container { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Box Tavolo verde: allargato all'88% per coprire 5 carte in orizzontale */
+    /* Box Tavolo verde: larghezza 88%, ALTEZZA AUMENTATA AL 32% */
     #motion-zone {
       position: absolute;
-      top: 30%;
+      top: 27%;
       left: 6%;
       width: 88%;
-      height: 25%;
+      height: 32%;
       border: 2px dashed #22c55e;
       pointer-events: none;
       border-radius: 8px;
@@ -102,25 +102,35 @@
   <canvas id="capture-canvas" style="display:none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un bot imbattibile di Scopa 1vs1 su Sisal.it.
+    const SYSTEM_PROMPT = `Sei un motore di gioco infallibile per la Scopa 1vs1 su Sisal.it.
 Mazzo: Napoletano regionale tradizionale.
-Semi: d=Denari/Ori, c=Coppe, s=Spade, b=Bastoni.
-Valori: 1 ad 7, 8=Fante, 9=Cavallo, 10=Re.
+Semi: d=Denari/Ori (cerchi/soli gialli), c=Coppe (calici), s=Spade (lame ricurve/incrociate), b=Bastoni (bastoni nodosi incrociati).
+
+CRITERI RIGOROSI DI DISTINZIONE TRA CARTE CRITICHE (MAZZO NAPOLETANO):
+1. DISTINZIONE 4 vs 5:
+   - 4 (Denari/Coppe/Spade/Bastoni): I 4 simboli sono rigorosamente ai lati o ai quattro angoli. IL CENTRO DELLA CARTA È COMPLETAMENTE VUOTO.
+   - 5 (Denari/Coppe/Spade/Bastoni): C'è SEMPRE UN SIMBOLO ESATTO AL CENTRO (es: il 5 di bastoni ha una X con un bastone dritto in mezzo; il 5 di coppe/denari ha il 5° elemento al centro geometrico). Se c'è un elemento centrale, è TASSATIVAMENTE un 5.
+2. DISTINZIONE 6 vs 7:
+   - 6: Configurazione simmetrica a coppie (3 elementi a sinistra e 3 a destra perfettamente speculari). Nessun elemento centrale isolato.
+   - 7: Configurazione DISPARI con asimmetria visibile:
+     * 7 di Spade: lama centrale dritta aggiunta.
+     * 7 di Coppe/Bastoni: una colonna o un elemento sbilanciato al centro.
+     * 7 di Denari (Settebello): cerchio dorato centrale caratteristico circondato da figure.
 
 REGOLE TATTICHE:
-1. Punti: Settebello (7d), Primiera (tutti i 7 e 6), Denari (>=6 vincono), Carte totali (>=21), Scope.
-2. PRESA OBBLIGATORIA A CARTA SINGOLA: Se a terra c'è una carta con valore nominale identico a quella giocata, DEVI prendere quella e non la somma.
-3. DIFESA SULLE SCOPE: Non lasciare somme totali o parziali <= 10 facilmente accoppiabili.
-4. Traccia le 40 carte uscite per calcolare l'endgame con certezza.
+1. Punti prioritari: Settebello (7d), Primiera (priorità assoluta ai 7, poi 6), Denari (>=6 vincono), Carte (>=21), Scope.
+2. PRESA OBBLIGATORIA A CARTA SINGOLA: Se c'è una carta a terra di valore nominale uguale, DEVI prendere quella e non la combinazione di somma.
+3. DIFESA: Non lasciare a terra combinazioni facili di somma <= 10.
+4. Traccia le 40 carte per dedurre con precisione le carte dell'avversario a fine smazzata.
 
-Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
+Rispondi ESCLUSIVAMENTE in formato JSON senza backtick o testo di contorno:
 {
   "carta_consigliata": "es: 1s",
   "azione": "Presa (es: Prende 1s) o Calata",
   "motivo": "Spiegazione tattica",
-  "carte_mano_hero": ["es: 1s", "3c", "8c"],
-  "carte_tavolo": ["carte a terra sul panno verde"],
-  "nuove_carte_uscite": ["carte uscite/prese in questo turno"]
+  "carte_mano_hero": ["es: 4c", "7d", "2b"],
+  "carte_tavolo": ["carte sul tavolo verde"],
+  "nuove_carte_uscite": ["carte giocate/prese in questo turno"]
 }`;
 
     let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
@@ -194,11 +204,11 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
       setInterval(() => {
         if (isProcessing || video.videoWidth === 0) return;
 
-        // 1. ZONA TAVOLO VERDE ALLARGATA (88% larghezza per ospitare 5 carte)
+        // 1. ZONA TAVOLO VERDE (Top 27%, altezza 32%, larghezza 88%)
         const tw = video.videoWidth * 0.88;
-        const th = video.videoHeight * 0.25;
+        const th = video.videoHeight * 0.32;
         const tx = video.videoWidth * 0.06;
-        const ty = video.videoHeight * 0.30;
+        const ty = video.videoHeight * 0.27;
 
         mCtx.drawImage(video, tx, ty, tw, th, 0, 0, motionCanvas.width, motionCanvas.height);
         const curTable = mCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
@@ -263,7 +273,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
       captureCanvas.width = 1280;
       captureCanvas.height = 720;
       cCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-      opponentLastSnapshot = captureCanvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+      opponentLastSnapshot = captureCanvas.toDataURL('image/jpeg', 0.80).split(',')[1];
     }
 
     async function eseguiChiamataAI() {
@@ -274,16 +284,18 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
       decisionEl.innerText = "CALCOLO...";
 
       try {
-        captureCanvas.width = 1600;
-        captureCanvas.height = 900;
+        // Scatto ad alta definizione (1920x1080) con qualità 0.92 per distinguere semi centrali
+        captureCanvas.width = 1920;
+        captureCanvas.height = 1080;
         cCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-        const currentFrameBase64 = captureCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+        const currentFrameBase64 = captureCanvas.toDataURL('image/jpeg', 0.92).split(',')[1];
 
         const promptText = `
         CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Inizio partita'} ]
-        ${opponentLastSnapshot ? "- Scatto della giocata precedente registrata." : ""}
-        - Immagine corrente: carte a terra sul panno verde (possono essere fino a 5 o più) e mano di Hero in basso nel riquadro rosso.
-        Indica la carta consigliata e l'azione.
+        ${opponentLastSnapshot ? "- Scatto dell'azione avversaria registrata poco fa." : ""}
+        - Immagine corrente: carte a terra sul panno verde (rettangolo verde) e mano di Hero (rettangolo rosso).
+        ATTENZIONE VISIVA: Conta accuratamente i semi per non confondere i 4 (centro vuoto) con i 5 (elemento centrale presente), e i 6 (coppie pari) con i 7 (colonna/elemento dispari centrale).
+        Indica la mossa migliore.
         `;
 
         const parts = [{ text: promptText }];
@@ -296,7 +308,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
           body: JSON.stringify({
             contents: [{ role: "user", parts: parts }],
             system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            generationConfig: { response_mime_type: "application/json", temperature: 0.1 }
+            generationConfig: { response_mime_type: "application/json", temperature: 0.05 }
           })
         });
 
