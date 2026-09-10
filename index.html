@@ -10,10 +10,10 @@
     #camera-container { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Box Tavolo: centrato solo sulle carte a terra Sisal (esclude avversario sopra) */
+    /* Box Tavolo verde: solo carte a terra */
     #motion-zone {
       position: absolute;
-      top: 36%;
+      top: 30%;
       left: 20%;
       width: 60%;
       height: 25%;
@@ -22,16 +22,16 @@
       border-radius: 8px;
     }
 
-    /* Box Turno Hero: posizionato esattamente sopra le tue 3 carte in basso */
+    /* Box Turno Hero: ALTO E AMPIO per coprire interamente le 3 carte in mano */
     #turn-zone {
       position: absolute;
-      bottom: 12%;
-      left: 25%;
-      width: 50%;
-      height: 12%;
+      bottom: 8%;
+      left: 17.5%;
+      width: 65%;
+      height: 24%;
       border: 2px solid #ef4444;
       pointer-events: none;
-      border-radius: 6px;
+      border-radius: 8px;
       background: rgba(239, 68, 68, 0.12);
     }
     
@@ -54,7 +54,7 @@
     .dot-hero { background: #ef4444; }
 
     #panel { flex: 0 0 auto; background: #1a1a1a; padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; z-index: 10; }
-    #decision { font-size: 1.7rem; font-weight: 900; text-align: center; color: #38bdf8; min-height: 2.1rem; }
+    #decision { font-size: 1.6rem; font-weight: 900; text-align: center; color: #38bdf8; min-height: 2rem; }
     #details { font-size: 0.85rem; color: #ccc; min-height: 2.8em; line-height: 1.4; }
     
     .btn-row { display: flex; gap: 8px; }
@@ -90,7 +90,7 @@
 
   <div id="panel">
     <div id="decision">IN ATTESA</div>
-    <div id="details">Inquadra il panno centrale nel verde e le tue 3 carte nel rosso.</div>
+    <div id="details">Riquadro verde su carte a terra, riquadro rosso ampio su carte in mano.</div>
     <div class="btn-row">
       <button id="btn-force">FORZA ANALISI (O Spazio)</button>
       <button id="btn-reset">Nuova Mano</button>
@@ -98,7 +98,7 @@
   </div>
 
   <canvas id="motion-canvas" width="160" height="120" style="display:none;"></canvas>
-  <canvas id="turn-canvas" width="60" height="60" style="display:none;"></canvas>
+  <canvas id="turn-canvas" width="80" height="80" style="display:none;"></canvas>
   <canvas id="capture-canvas" style="display:none;"></canvas>
 
   <script>
@@ -109,14 +109,14 @@ Valori: 1 ad 7, 8=Fante, 9=Cavallo, 10=Re.
 
 REGOLE TATTICHE:
 1. Punti: Settebello (7d), Primiera (tutti i 7 e 6), Denari (>=6 vincono), Carte totali (>=21), Scope.
-2. PRESA OBBLIGATORIA A CARTA SINGOLA: Se a terra c'è una carta con valore nominale identico a quella giocata, DEVI prendere quella e non la combinazione di somma.
-3. DIFESA SULLE SCOPE: Non lasciare a terra somme totali o parziali <= 10 facilmente accoppiabili.
-4. Traccia le 40 carte uscite per calcolare con certezza l'endgame.
+2. PRESA OBBLIGATORIA A CARTA SINGOLA: Se a terra c'è una carta con valore nominale identico a quella giocata, DEVI prendere quella e non la somma.
+3. DIFESA SULLE SCOPE: Non lasciare somme totali o parziali <= 10 facilmente accoppiabili.
+4. Traccia le 40 carte uscite per calcolare l'endgame con certezza.
 
 Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
 {
   "carta_consigliata": "es: 1s",
-  "azione": "Presa (es: Prende 1s a terra) oppure Calata",
+  "azione": "Presa (es: Prende 1s) o Calata",
   "motivo": "Spiegazione tattica",
   "carte_mano_hero": ["es: 1s", "3c", "8c"],
   "carte_tavolo": ["carte a terra sul panno verde"],
@@ -162,7 +162,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
       carteUscite = [];
       opponentLastSnapshot = null;
       decisionEl.innerText = "NUOVA SMAZZATA";
-      detailsEl.innerText = "Storico resettato. In attesa della prima mano.";
+      detailsEl.innerText = "Storico 40 carte resettato.";
       batchCountEl.innerText = "AUTOPILOT PRONTO";
       indicatorEl.className = "dot";
     };
@@ -178,13 +178,10 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
           startVisionLoop();
         };
       } catch (err) {
-        alert("Errore camera: " + err.message);
+        alert("Errore fotocamera: " + err.message);
       }
     }
 
-    // ==========================================
-    // LOOP CONTINUO DI VISIONE E RILEVAMENTO
-    // ==========================================
     let prevTableData = null;
     let prevHeroData = null;
     let tableMotion = false;
@@ -195,11 +192,11 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
       setInterval(() => {
         if (isProcessing || video.videoWidth === 0) return;
 
-        // 1. ZONA TAVOLO (36% top, altezza 25% - solo carte a terra)
+        // 1. ZONA TAVOLO VERDE
         const tw = video.videoWidth * 0.60;
         const th = video.videoHeight * 0.25;
         const tx = video.videoWidth * 0.20;
-        const ty = video.videoHeight * 0.36;
+        const ty = video.videoHeight * 0.30;
 
         mCtx.drawImage(video, tx, ty, tw, th, 0, 0, motionCanvas.width, motionCanvas.height);
         const curTable = mCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
@@ -231,11 +228,11 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
         }
         prevTableData = curTable;
 
-        // 2. ZONA HERO (rilevamento alzata carte di Hero al tuo turno)
-        const hw = video.videoWidth * 0.50;
-        const hh = video.videoHeight * 0.12;
-        const hx = video.videoWidth * 0.25;
-        const hy = video.videoHeight * 0.76;
+        // 2. ZONA HERO (Riquadro alto sulle carte)
+        const hw = video.videoWidth * 0.65;
+        const hh = video.videoHeight * 0.24;
+        const hx = video.videoWidth * 0.175;
+        const hy = video.videoHeight * 0.68;
 
         tCtx.drawImage(video, hx, hy, hw, hh, 0, 0, turnCanvas.width, turnCanvas.height);
         const curHero = tCtx.getImageData(0, 0, turnCanvas.width, turnCanvas.height);
@@ -248,8 +245,7 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
             if (Math.abs(hd1[j] - hd2[j]) + Math.abs(hd1[j+1] - hd2[j+1]) + Math.abs(hd1[j+2] - hd2[j+2]) > 90) heroDiff++;
           }
 
-          // Lo scatto delle carte che si alzano attiva l'AI
-          if (heroDiff > 35) {
+          if (heroDiff > 45) {
             heroTurnCooldown = true;
             indicatorEl.className = "dot dot-hero";
             batchCountEl.innerText = "Tocca a te! Calcolo...";
@@ -282,16 +278,17 @@ Rispondi ESCLUSIVAMENTE in JSON senza backtick o markdown:
         const currentFrameBase64 = captureCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 
         const promptText = `
-        CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Nessuna, inizio partita'} ]
-        ${opponentLastSnapshot ? "- C'è lo scatto dell'azione avversaria precedente." : ""}
-        - Immagine corrente: carte a terra sul panno verde e mano di Hero in basso.
-        Cosa devo giocare adesso?
+        CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Inizio partita'} ]
+        ${opponentLastSnapshot ? "- Scatto della giocata precedente registrata." : ""}
+        - Immagine corrente: carte a terra sul panno verde e mano di Hero in basso nel riquadro rosso.
+        Indica la carta consigliata e l'azione.
         `;
 
         const parts = [{ text: promptText }];
         if (opponentLastSnapshot) parts.push({ inline_data: { mime_type: "image/jpeg", data: opponentLastSnapshot } });
         parts.push({ inline_data: { mime_type: "image/jpeg", data: currentFrameBase64 } });
 
+        // Endpoint modello standard aggiornato
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
