@@ -26,7 +26,7 @@
     #dashboard { flex: 0 0 auto; background: #1a1a1a; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; max-height: 50vh; overflow-y: auto; }
     
     .status-row { display: flex; justify-content: space-between; align-items: center; }
-    #decision { font-size: 1.5rem; font-weight: 900; color: #10b981; }
+    #decision { font-size: 1.6rem; font-weight: 900; color: #10b981; letter-spacing: 0.5px; }
     #game-info { font-size: 0.85rem; color: #aaa; }
 
     .card-matrix { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: #222; padding: 8px; border-radius: 6px; font-size: 0.75rem; text-align: center; }
@@ -38,10 +38,10 @@
     .card-played { background: #181818; color: #555; text-decoration: line-through; }
     .card-oppo { background: #dc2626; color: #fff; font-weight: bold; border: 1px solid #f87171; }
 
-    .card-h { color: #ef4444; }
-    .card-d { color: #38bdf8; }
-    .card-c { color: #22c55e; }
-    .card-s { color: #f8fafc; }
+    .card-c { color: #ef4444; } /* Cuori */
+    .card-d { color: #38bdf8; } /* Denari */
+    .card-f { color: #22c55e; } /* Fiori */
+    .card-p { color: #f8fafc; } /* Picche */
 
     #details { font-size: 0.9rem; color: #ccc; min-height: 2.2em; line-height: 1.4; }
 
@@ -76,17 +76,17 @@
     </div>
 
     <div class="card-matrix">
-      <div class="suit-col" id="col-c">
-        <div class="suit-title card-c">♣ Fiori</div>
+      <div class="suit-col" id="col-f">
+        <div class="suit-title card-f">♣ Fiori (F)</div>
       </div>
       <div class="suit-col" id="col-d">
-        <div class="suit-title card-d">♦ Quadri</div>
+        <div class="suit-title card-d">♦ Denari (D)</div>
       </div>
-      <div class="suit-col" id="col-h">
-        <div class="suit-title card-h">♥ Cuori</div>
+      <div class="suit-col" id="col-c">
+        <div class="suit-title card-c">♥ Cuori (C)</div>
       </div>
-      <div class="suit-col" id="col-s">
-        <div class="suit-title card-s">♠ Picche</div>
+      <div class="suit-col" id="col-p">
+        <div class="suit-title card-p">♠ Picche (P)</div>
       </div>
     </div>
 
@@ -97,43 +97,60 @@
   <canvas id="canvas" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un computer vision per Tresette 1vs1 su Sisal con mazzo francese standard a 40 carte (bicolore: rosso e nero).
-Valori ammessi: A, 2, 3, 4, 5, 6, 7, J, Q, K di Cuori(h), Quadri(d), Fiori(c), Picche(s). (8, 9 e 10 NON ESISTONO).
+    const SYSTEM_PROMPT = `Sei un computer vision per Tresette 1vs1 su Sisal con mazzo francese standard a 40 carte (rosso e nero).
+Valori ammessi: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9 e 10 NON ESISTONO).
 
-ATTENZIONE MASSIMA DISTINZIONE SEMI NERI (Fiori vs Picche):
-- FIORI (c): Simbolo a trifoglio formato da 3 lobi/pallini arrotondati distinti con gambo sottile.
-- PICCHE (s): Simbolo a foglia con PUNTA ACUTA e triangolare rivolta verso l'alto.
-Guarda attentamente l'indice in alto a sinistra di ciascuna carta per non scambiare MAI 'c' con 's'.
+ATTENZIONE MASSIMA DISTINZIONE GEOMETRICA DEI SEMI:
+1. SEMI ROSSI:
+   - CUORI (h): Sagoma con punta rivolta in basso e DUE curve rotondeggianti in alto.
+   - DENARI/QUADRI (d): Rombo geometrico spigoloso a 4 lati dritti, punta in alto e in basso. Non confondere mai Cuori e Denari!
+2. SEMI NERI:
+   - FIORI (c): Trifoglio formato da 3 pallini rotondi distinti con gambo sottile.
+   - PICCHE (s): Foglia a cuore rovesciato con PUNTA ACUTA triangolare rivolta in alto.
 
 Compito:
 1. Riconosci TUTTE le carte in mano a Hero in basso ("mie_carte").
-2. Se presente, riconosci la carta giocata dall'avversario al centro ("carta_oppo_centro").
-3. Se presente, riconosci la carta appena pescata e scoperta in alto a destra dall'avversario ("pescata_oppo").
+2. Se presente, la carta giocata dall'avversario al centro ("carta_oppo_centro").
+3. Se presente, la carta pescata scoperta in alto a destra dall'avversario ("pescata_oppo").
 
-Restituisci ESCLUSIVAMENTE un JSON valido:
+Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=picche):
 {
   "mie_carte": ["3h", "Ad", "7c"],
   "carta_oppo_centro": "Kh",
   "pescata_oppo": null
 }`;
 
+    // Conversione da formato standard AI a notazione italiana richiesta
+    // h -> c (Cuori), d -> d (Denari), c -> f (Fiori), s -> p (Picche)
+    function toItalianCard(code) {
+      if (!code || typeof code !== 'string') return null;
+      const rank = code.slice(0, -1).toUpperCase();
+      const suit = code.slice(-1).toLowerCase();
+      let itSuit = suit;
+      if (suit === 'h') itSuit = 'c';
+      else if (suit === 'd') itSuit = 'd';
+      else if (suit === 'c') itSuit = 'f';
+      else if (suit === 's') itSuit = 'p';
+      return `${rank}${itSuit.toUpperCase()}`;
+    }
+
     const POWER = { '3': 10, '2': 9, 'A': 8, 'K': 7, 'Q': 6, 'J': 5, '7': 4, '6': 3, '5': 2, '4': 1 };
     const POINTS = { 'A': 1.0, '3': 0.33, '2': 0.33, 'K': 0.33, 'Q': 0.33, 'J': 0.33, '7': 0, '6': 0, '5': 0, '4': 0 };
 
     const RANKS = ['3', '2', 'A', 'K', 'Q', 'J', '7', '6', '5', '4'];
-    const SUITS = ['c', 'd', 'h', 's'];
+    const SUITS_IT = ['f', 'd', 'c', 'p'];
 
     let heroHand = [];
     let oppoKnownHand = new Set();
     let playedCards = new Set();
 
     function initMatrix() {
-      SUITS.forEach(s => {
+      SUITS_IT.forEach(s => {
         const col = document.getElementById(`col-${s}`);
         RANKS.forEach(r => {
           const badge = document.createElement('div');
           badge.className = 'card-badge';
-          badge.id = `card-${r}${s}`;
+          badge.id = `card-${r}${s.toUpperCase()}`;
           badge.innerText = `${r}${s.toUpperCase()}`;
           col.appendChild(badge);
         });
@@ -142,9 +159,9 @@ Restituisci ESCLUSIVAMENTE un JSON valido:
     initMatrix();
 
     function updateMatrixUI() {
-      SUITS.forEach(s => {
+      SUITS_IT.forEach(s => {
         RANKS.forEach(r => {
-          const id = `${r}${s}`;
+          const id = `${r}${s.toUpperCase()}`;
           const el = document.getElementById(`card-${id}`);
           if (!el) return;
 
@@ -296,31 +313,36 @@ Restituisci ESCLUSIVAMENTE un JSON valido:
         const end = rawText.lastIndexOf('}');
         const parsed = JSON.parse(rawText.substring(start, end + 1));
 
-        if (parsed.mie_carte && Array.isArray(parsed.mie_carte)) {
-          heroHand = parsed.mie_carte;
+        // Conversione carte in notazione italiana (C, D, F, P)
+        heroHand = (parsed.mie_carte && Array.isArray(parsed.mie_carte)) 
+          ? parsed.mie_carte.map(toItalianCard).filter(Boolean) 
+          : [];
+
+        const pescataOppoIt = toItalianCard(parsed.pescata_oppo);
+        const cartaCentroIt = toItalianCard(parsed.carta_oppo_centro);
+
+        if (pescataOppoIt) {
+          oppoKnownHand.add(pescataOppoIt);
         }
 
-        if (parsed.pescata_oppo) {
-          oppoKnownHand.add(parsed.pescata_oppo);
+        if (cartaCentroIt) {
+          playedCards.add(cartaCentroIt);
+          oppoKnownHand.delete(cartaCentroIt);
         }
 
-        if (parsed.carta_oppo_centro) {
-          playedCards.add(parsed.carta_oppo_centro);
-          oppoKnownHand.delete(parsed.carta_oppo_centro);
-        }
-
-        if (parsed.pescata_oppo && !parsed.carta_oppo_centro) {
-          decisionEl.innerText = `PESCATA: ${parsed.pescata_oppo}`;
+        if (pescataOppoIt && !cartaCentroIt) {
+          decisionEl.innerText = `PESCATA: ${pescataOppoIt}`;
           decisionEl.style.color = "#ef4444";
-          detailsEl.innerHTML = `• Carta avversario memorizzata: <b>${parsed.pescata_oppo}</b><br>• Attendi che giochi al centro e riscatta.`;
+          detailsEl.innerHTML = `• Carta avversario memorizzata: <b>${pescataOppoIt}</b><br>• Attendi che giochi al centro e riscatta.`;
         } else {
-          const best = calculateBestMove(parsed.carta_oppo_centro, heroHand);
+          const best = calculateBestMove(cartaCentroIt, heroHand);
           decisionEl.innerText = `GIOCA: ${best.card}`;
           decisionEl.style.color = "#10b981";
           detailsEl.innerHTML = `
-            • <b>A terra:</b> ${parsed.carta_oppo_centro || 'Nessuna (Tocca a te)'}<br>
+            • <b>A terra:</b> ${cartaCentroIt || 'Nessuna (Tocca a te)'}<br>
             • <b>Strategia:</b> ${best.desc}<br>
-            • <b>Carte note oppo:</b> ${Array.from(oppoKnownHand).join(', ') || 'Nessuna'}
+            • <b>Mano:</b> ${heroHand.join(' ')}<br>
+            • <b>Carte note oppo:</b> ${Array.from(oppoKnownHand).join(' ') || 'Nessuna'}
           `;
         }
 
