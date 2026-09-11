@@ -97,28 +97,20 @@
   <canvas id="canvas" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un computer vision OCR per Tresette 1vs1 su Sisal con mazzo francese da 40 carte (rosso e nero).
-Valori: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
+    const SYSTEM_PROMPT = `Sei un lettore OCR preciso per Tresette 1vs1 su Sisal con mazzo francese da 40 carte (rosso e nero).
+Valori ammessi: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
 
-ATTENZIONE MASSIMA DISTINZIONE GEOMETRICA DEI SEMI:
-1. SEMI ROSSI:
-   - CUORI (h): Punta rivolta in basso e DUE curve rotondeggianti in alto.
-   - DENARI/QUADRI (d): Rombo geometrico con 4 lati dritti e spigoli netti.
-2. SEMI NERI:
-   - FIORI (c): Trifoglio formato da 3 pallini rotondi distinti con gambo sottile.
-   - PICCHE (s): Foglia a cuore rovesciato con PUNTA ACUTA triangolare rivolta in alto.
+ATTENZIONE DISTINZIONE SEMI:
+- CUORI (h): Rosso con due curve in alto e punta in basso.
+- DENARI/QUADRI (d): Rosso con 4 lati dritti a rombo.
+- FIORI (c): Nero a trifoglio con 3 pallini distinti e gambo.
+- PICCHE (s): Nero a foglia a cuore rovesciato con punta acuta in alto.
 
 Compito:
 1. Riconosci TUTTE le carte in mano a Hero in basso ("mie_carte").
 2. Se presente, la carta giocata dall'avversario al centro ("carta_oppo_centro").
 3. Se presente, la carta pescata scoperta in alto a destra dall'avversario ("pescata_oppo").
-
-Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=picche):
-{
-  "mie_carte": ["3h", "Ad", "7c"],
-  "carta_oppo_centro": "Kh",
-  "pescata_oppo": null
-}`;
+Usa la notazione: h=cuori, d=denari, c=fiori, s=picche (es. "3h", "Ad", "7c").`;
 
     function toItalianCard(code) {
       if (!code || typeof code !== 'string') return null;
@@ -186,13 +178,13 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
       if (!oppoCard) {
         const lowCards = hand.filter(c => (POINTS[getRank(c)] || 0) === 0)
                              .sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
-        if (lowCards.length > 0) return { card: lowCards[0], desc: "Apri con scartina a 0 punti" };
+        if (lowCards.length > 0) return { card: lowCards[0], desc: "Apri con scartina a 0 punti per esplorare" };
 
         const padroni = hand.filter(c => getRank(c) === '3');
-        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 per fare presa" };
+        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 padrone per incassare la presa" };
 
         hand.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
-        return { card: hand[0], desc: "Apertura con carta minima" };
+        return { card: hand[0], desc: "Apertura conservativa con minima" };
       }
 
       const oppoRank = getRank(oppoCard);
@@ -294,8 +286,8 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
 
         const base64Image = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
 
-        // Chiamata con configurazione corretta (maxOutputTokens a 600 per non troncare il JSON)
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
+        // STRUCTURED OUTPUT SCHEMATIZZATO
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -308,7 +300,24 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
             }],
             generationConfig: {
               responseMimeType: "application/json",
-              maxOutputTokens: 600
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  mie_carte: {
+                    type: "ARRAY",
+                    items: { type: "STRING" }
+                  },
+                  carta_oppo_centro: {
+                    type: "STRING",
+                    nullable: true
+                  },
+                  pescata_oppo: {
+                    type: "STRING",
+                    nullable: true
+                  }
+                },
+                required: ["mie_carte"]
+              }
             }
           })
         });
@@ -317,13 +326,9 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
         if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) throw new Error("Risposta vuota da Gemini");
+        if (!rawText) throw new Error("Risposta vuota dall'API");
 
-        const start = rawText.indexOf('{');
-        const end = rawText.lastIndexOf('}');
-        if (start === -1 || end === -1) throw new Error("JSON non trovato nella risposta");
-
-        const parsed = JSON.parse(rawText.substring(start, end + 1));
+        const parsed = JSON.parse(rawText);
 
         heroHand = (parsed.mie_carte && Array.isArray(parsed.mie_carte)) 
           ? parsed.mie_carte.map(toItalianCard).filter(Boolean) 
@@ -344,7 +349,7 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
         if (pescataOppoIt && !cartaCentroIt) {
           decisionEl.innerText = `PESCATA: ${pescataOppoIt}`;
           decisionEl.style.color = "#ef4444";
-          detailsEl.innerHTML = `• Pescata registrata: <b>${pescataOppoIt}</b><br>• Attendi la carta al centro e riscatta.`;
+          detailsEl.innerHTML = `• Pescata registrata: <b>${pescataOppoIt}</b><br>• Attendi che giochi e riscatta.`;
         } else {
           const best = calculateBestMove(cartaCentroIt, heroHand);
           decisionEl.innerText = `GIOCA: ${best.card}`;
