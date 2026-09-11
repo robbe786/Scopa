@@ -2,82 +2,54 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Sisal Briscola 1vs1 Master</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Tresette 1vs1 Assistant</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { background-color: #121212; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-    #camera-container { flex: 1 1 auto; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+    body { background-color: #111; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    
+    #camera-container { flex: 1 1 auto; min-height: 0; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Box Tavolo verde: spostato più in alto (top: 22%) */
-    #motion-zone {
-      position: absolute;
-      top: 22%;
-      left: 15%;
-      width: 70%;
-      height: 30%;
-      border: 2px dashed #22c55e;
-      pointer-events: none;
-      border-radius: 8px;
-    }
-
-    /* Box Briscola blu: più in alto (top: 10%) e più a destra (right: 2%) */
-    #briscola-zone {
-      position: absolute;
-      top: 10%;
-      right: 2%;
-      width: 25%;
-      height: 25%;
-      border: 2px dotted #38bdf8;
-      pointer-events: none;
-      border-radius: 6px;
-    }
-
-    /* Box Turno Hero rosso: allargato in verticale al 28% */
-    #turn-zone {
-      position: absolute;
-      bottom: 5%;
-      left: 17.5%;
-      width: 65%;
-      height: 28%;
-      border: 2px solid #ef4444;
-      pointer-events: none;
-      border-radius: 8px;
-      background: rgba(239, 68, 68, 0.12);
+    /* OVERLAY TRESETTE CALIBRATO (72% ALTEZZA, 94% LARGHEZZA) */
+    #overlay-box { 
+      position: absolute; 
+      border: 2px dashed #38bdf8; 
+      width: 94%; 
+      height: 72%; 
+      pointer-events: none; 
+      border-radius: 8px; 
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); 
     }
     
-    #status-badge {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      background: rgba(0,0,0,0.85);
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border: 1px solid #444;
-      z-index: 10;
-    }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; }
-    .dot-motion { background: #eab308; }
-    .dot-hero { background: #ef4444; }
-
-    #panel { flex: 0 0 auto; background: #1a1a1a; padding: 12px 16px 20px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; z-index: 10; }
-    #decision { font-size: 1.7rem; font-weight: 900; text-align: center; color: #38bdf8; min-height: 2.1rem; }
-    #details { font-size: 0.85rem; color: #ccc; min-height: 2.8em; line-height: 1.4; }
+    #dashboard { flex: 0 0 auto; background: #1a1a1a; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; max-height: 48vh; overflow-y: auto; }
     
-    .btn-row { display: flex; gap: 8px; }
-    #btn-force { flex: 2; padding: 14px; font-size: 1rem; font-weight: bold; color: white; background: #2563eb; border: none; border-radius: 10px; cursor: pointer; }
-    #btn-force:disabled { background: #444; color: #888; }
-    #btn-reset { flex: 1; padding: 14px; font-size: 0.9rem; background: #374151; color: white; border: none; border-radius: 10px; cursor: pointer; }
+    .status-row { display: flex; justify-content: space-between; align-items: center; }
+    #decision { font-size: 1.5rem; font-weight: 900; color: #10b981; }
+    #game-info { font-size: 0.85rem; color: #aaa; }
+
+    /* PANNELLO TRACCIATURA CARTE */
+    .card-matrix { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: #222; padding: 8px; border-radius: 6px; font-size: 0.75rem; text-align: center; }
+    .suit-col { display: flex; flex-direction: column; gap: 2px; }
+    .suit-title { font-weight: bold; padding-bottom: 2px; border-bottom: 1px solid #444; margin-bottom: 2px; }
+    
+    .card-badge { padding: 2px 0; border-radius: 3px; background: #2e2e2e; font-family: monospace; font-size: 0.8rem; }
+    .card-in-hand { background: #0284c7; color: #fff; font-weight: bold; }
+    .card-played { background: #1f1f1f; color: #555; text-decoration: line-through; }
+    .card-oppo { background: #dc2626; color: #fff; font-weight: bold; }
+
+    .card-h { color: #ef4444; }
+    .card-d { color: #38bdf8; }
+    .card-c { color: #22c55e; }
+    .card-s { color: #f8fafc; }
+
+    #btn-action { width: 100%; padding: 14px; font-size: 1.1rem; font-weight: bold; color: white; background: #0284c7; border: none; border-radius: 10px; cursor: pointer; }
+    #btn-action:disabled { background: #444; color: #888; }
 
     #api-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 100; }
-    .modal-content { background: #222; padding: 20px; border-radius: 12px; width: 100%; max-width: 350px; border: 1px solid #333; }
+    .modal-content { background: #222; padding: 20px; border-radius: 12px; width: 100%; max-width: 350px; }
     .modal-content input { width: 100%; padding: 12px; margin: 12px 0; border-radius: 6px; border: 1px solid #444; background: #111; color: white; }
-    .modal-content button { width: 100%; padding: 12px; background: #2563eb; border: none; border-radius: 6px; color: white; font-weight: bold; }
+    .modal-content button { width: 100%; padding: 12px; background: #0284c7; border: none; border-radius: 6px; color: white; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -85,297 +57,190 @@
   <div id="api-modal">
     <div class="modal-content">
       <h3>Gemini API Key</h3>
-      <input type="text" id="api-key-input" placeholder="Incolla chiave AIza...">
-      <button id="save-key-btn">Salva e Avvia</button>
+      <input type="text" id="api-key-input" placeholder="Incolla chiave...">
+      <button id="save-key-btn">Salva</button>
     </div>
   </div>
 
   <div id="camera-container">
     <video id="video" autoplay playsinline muted></video>
-    <div id="motion-zone"></div>
-    <div id="briscola-zone"></div>
-    <div id="turn-zone"></div>
-    <div id="status-badge">
-      <div id="indicator" class="dot"></div>
-      <span id="batch-count">BRISCOLA MASTER ATTIVO</span>
-    </div>
+    <div id="overlay-box"></div>
   </div>
 
-  <div id="panel">
-    <div id="decision">IN ATTESA</div>
-    <div id="details">Tastierino: INVIO = Calcola Mossa | 0 = Nuova Smazzata</div>
-    <div class="btn-row">
-      <button id="btn-force">FORZA ANALISI (Invio)</button>
-      <button id="btn-reset">Nuova Partita (0)</button>
+  <div id="dashboard">
+    <div class="status-row">
+      <div id="decision">IN ATTESA AVVIO</div>
+      <div id="game-info">Mano 1/20 • Mazzo: 20</div>
     </div>
+
+    <!-- MATRICE DELLE 40 CARTE (TRACCIAMENTO) -->
+    <div class="card-matrix">
+      <div class="suit-col" id="col-c">
+        <div class="suit-title card-c">♣ Fiori</div>
+      </div>
+      <div class="suit-col" id="col-d">
+        <div class="suit-title card-d">♦ Quadri</div>
+      </div>
+      <div class="suit-col" id="col-h">
+        <div class="suit-title card-h">♥ Cuori</div>
+      </div>
+      <div class="suit-col" id="col-s">
+        <div class="suit-title card-s">♠ Picche</div>
+      </div>
+    </div>
+
+    <div id="details" style="font-size: 0.85rem; color: #ccc;">Inquadra il tavolo Sisal e scatta a inizio smazzata.</div>
+    <button id="btn-action">LEGGI MANO INIZIALE (10 CARTE)</button>
   </div>
 
-  <canvas id="motion-canvas" width="180" height="120" style="display:none;"></canvas>
-  <canvas id="turn-canvas" width="80" height="80" style="display:none;"></canvas>
-  <canvas id="capture-canvas" style="display:none;"></canvas>
+  <canvas id="canvas" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un maestro di Briscola 1vs1 su Sisal.it.
-Mazzo Francese (40 carte standard):
-- Semi: d=Quadri (rombo rosso), h=Cuori (cuore rosso), s=Picche (foglia nera), c=Fiori (trifoglio nero).
-- Gerarchia di presa e valore punti:
-  * Asso (1) = 11 pt
-  * Tre (3) = 10 pt
-  * Re (K / 10) = 4 pt
-  * Cavallo/Regina (Q / 9) = 3 pt
-  * Fante (J / 8) = 2 pt
-  * Lisci (7, 6, 5, 4, 2) = 0 pt
+    const SYSTEM_PROMPT = `Sei un computer vision specializzato nel Tresette 1vs1 (mazzo francese da 40 carte: A, 2, 3, 4, 5, 6, 7, J, Q, K di Cuori(h), Quadri(d), Fiori(c), Picche(s)). 8, 9 e 10 non esistono.
 
-REGOLE TATTICHE COGENTI BRISCOLA 1VS1:
-1. IDENTIFICAZIONE SEME DI BRISCOLA: Riconosci la carta scoperta sotto il mazzo del tallone (box in alto a destra).
-2. PRIMO DI MANO (Hero gioca per primo):
-   - Mai aprire con Carichi (Asso o 3) se non a mazzo esaurito.
-   - Mai aprire di Briscola secca.
-   - Gioca il liscio più basso (2, 4, 5) del seme non briscola più controllato.
-3. SECONDO DI MANO (Avversario ha già giocato la carta a terra):
-   - Se gioca un Liscio: non sprecare carichi né briscole. Butta un liscio per farlo rimanere di mano o supera con figura solo se conveniente.
-   - Se gioca un Carico (Asso o 3): taglia con Briscola piccola/media (se non puoi superare sul seme) per intascare 10-11 punti pesanti.
-   - Se gioca Briscola alta: scarta un liscio inutile (non regalare punti).
-4. CONTEGGIO PUNTI (Target: 61 punti per vincere):
-   - Tieni conto dei punti già accumulati e dei Carichi/Briscole rimasti nel tallone.
-   - All'esaurimento del tallone (ultime 3 mani), deduci con esattezza le 3 carte avversarie per forzare la chiusura.
+Compito:
+1. Riconosci le 10 carte nella mano di Hero in basso (valore + seme).
+2. Se presente, riconosci la carta giocata al centro dall'avversario.
+3. Se presente, riconosci la carta pescata scoperta in alto a destra dall'avversario.
 
-Rispondi ESCLUSIVAMENTE in JSON valido senza backtick o testo extra:
+Restituisci ESCLUSIVAMENTE un JSON:
 {
-  "seme_briscola": "es: Cuori (h)",
-  "carta_consigliata": "es: 4s",
-  "azione": "Liscio di scarto OPPURE Presa di carico OPPURE Taglio con briscola",
-  "motivo": "Spiegazione tattica e gestione della mano",
-  "carte_mano_hero": ["carte lette in mano"],
-  "carta_avversario_tavolo": "carta calata dall'avversario o vuoto se siamo primi",
-  "nuove_carte_uscite": ["carte uscite in questo turno da scalare dalle 40"]
+  "mie_carte": ["3h", "Ad", "7c", ...],
+  "carta_avversario_centro": "4h" o null,
+  "pescata_avversario": "2s" o null
 }`;
 
-    let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
-    let carteUscite = [];
-    let opponentLastSnapshot = null;
-    let isProcessing = false;
+    const RANKS = ['3', '2', 'A', 'K', 'Q', 'J', '7', '6', '5', '4'];
+    const SUITS = ['c', 'd', 'h', 's'];
+    
+    // Inizializza visualmente le 40 carte
+    function initMatrix() {
+      SUITS.forEach(s => {
+        const col = document.getElementById(`col-${s}`);
+        RANKS.forEach(r => {
+          const badge = document.createElement('div');
+          badge.className = 'card-badge';
+          badge.id = `card-${r}${s}`;
+          badge.innerText = `${r}${s.toUpperCase()}`;
+          col.appendChild(badge);
+        });
+      });
+    }
+    initMatrix();
 
     const video = document.getElementById('video');
-    const motionCanvas = document.getElementById('motion-canvas');
-    const mCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
-    const turnCanvas = document.getElementById('turn-canvas');
-    const tCtx = turnCanvas.getContext('2d', { willReadFrequently: true });
-    const captureCanvas = document.getElementById('capture-canvas');
-    const cCtx = captureCanvas.getContext('2d');
-
-    const btnForce = document.getElementById('btn-force');
-    const btnReset = document.getElementById('btn-reset');
+    const canvas = document.getElementById('canvas');
+    const btnAction = document.getElementById('btn-action');
     const decisionEl = document.getElementById('decision');
     const detailsEl = document.getElementById('details');
-    const batchCountEl = document.getElementById('batch-count');
-    const indicatorEl = document.getElementById('indicator');
     const apiModal = document.getElementById('api-modal');
+    const apiKeyInput = document.getElementById('api-key-input');
+    const saveKeyBtn = document.getElementById('save-key-btn');
+
+    let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
 
     if (apiKey) {
       apiModal.style.display = 'none';
-      initApp();
+      startCamera();
     }
 
-    document.getElementById('save-key-btn').onclick = () => {
-      apiKey = document.getElementById('api-key-input').value.trim();
+    saveKeyBtn.onclick = () => {
+      apiKey = apiKeyInput.value.trim();
       if (apiKey) {
         localStorage.setItem('GEMINI_API_KEY', apiKey);
         apiModal.style.display = 'none';
-        initApp();
+        startCamera();
       }
     };
 
-    function eseguiReset() {
-      carteUscite = [];
-      opponentLastSnapshot = null;
-      decisionEl.innerText = "NUOVA PARTITA";
-      detailsEl.innerText = "Conteggio 40 carte azzerato. Inquadra la briscola a terra.";
-      batchCountEl.innerText = "BRISCOLA MASTER ATTIVO";
-      indicatorEl.className = "dot";
-    }
-
-    btnReset.onclick = eseguiReset;
-
-    async function initApp() {
+    async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } },
+          video: { 
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920, min: 1280 },
+            height: { ideal: 1080, min: 720 }
+          },
           audio: false
         });
         video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          startVisionLoop();
-        };
+        video.setAttribute("playsinline", true);
+        await video.play();
       } catch (err) {
         alert("Errore camera: " + err.message);
       }
     }
 
-    let prevTableData = null;
-    let prevHeroData = null;
-    let tableMotion = false;
-    let calmFrames = 0;
-    let heroTurnCooldown = false;
+    btnAction.onclick = async () => {
+      if (!apiKey || !video.videoWidth) return;
 
-    function startVisionLoop() {
-      setInterval(() => {
-        if (isProcessing || video.videoWidth === 0) return;
-
-        // 1. ZONA TAVOLO (spostata più in alto: top 22%)
-        const tw = video.videoWidth * 0.70;
-        const th = video.videoHeight * 0.30;
-        const tx = video.videoWidth * 0.15;
-        const ty = video.videoHeight * 0.22;
-
-        mCtx.drawImage(video, tx, ty, tw, th, 0, 0, motionCanvas.width, motionCanvas.height);
-        const curTable = mCtx.getImageData(0, 0, motionCanvas.width, motionCanvas.height);
-
-        if (prevTableData) {
-          let diff = 0;
-          const d1 = prevTableData.data;
-          const d2 = curTable.data;
-          for (let i = 0; i < d1.length; i += 8) {
-            if (Math.abs(d1[i] - d2[i]) + Math.abs(d1[i+1] - d2[i+1]) + Math.abs(d1[i+2] - d2[i+2]) > 80) diff++;
-          }
-
-          if (diff > 30) {
-            tableMotion = true;
-            calmFrames = 0;
-            heroTurnCooldown = false;
-            indicatorEl.className = "dot dot-motion";
-            batchCountEl.innerText = "Avversario cala...";
-          } else if (tableMotion) {
-            calmFrames++;
-            if (calmFrames >= 3) {
-              catturaFrameAvversario();
-              tableMotion = false;
-              calmFrames = 0;
-              indicatorEl.className = "dot";
-              batchCountEl.innerText = "Carta avversario a terra";
-            }
-          }
-        }
-        prevTableData = curTable;
-
-        // 2. ZONA HERO (altezza aumentata a 28%, bottom 5%)
-        const hw = video.videoWidth * 0.65;
-        const hh = video.videoHeight * 0.28;
-        const hx = video.videoWidth * 0.175;
-        const hy = video.videoHeight * 0.67;
-
-        tCtx.drawImage(video, hx, hy, hw, hh, 0, 0, turnCanvas.width, turnCanvas.height);
-        const curHero = tCtx.getImageData(0, 0, turnCanvas.width, turnCanvas.height);
-
-        if (prevHeroData && !tableMotion && !heroTurnCooldown) {
-          let heroDiff = 0;
-          const hd1 = prevHeroData.data;
-          const hd2 = curHero.data;
-          for (let j = 0; j < hd1.length; j += 4) {
-            if (Math.abs(hd1[j] - hd2[j]) + Math.abs(hd1[j+1] - hd2[j+1]) + Math.abs(hd1[j+2] - hd2[j+2]) > 90) heroDiff++;
-          }
-
-          if (heroDiff > 45) {
-            heroTurnCooldown = true;
-            indicatorEl.className = "dot dot-hero";
-            batchCountEl.innerText = "Tocca a te! Calcolo...";
-            eseguiChiamataAI();
-          }
-        }
-        prevHeroData = curHero;
-
-      }, 250);
-    }
-
-    function catturaFrameAvversario() {
-      captureCanvas.width = 1280;
-      captureCanvas.height = 720;
-      cCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-      opponentLastSnapshot = captureCanvas.toDataURL('image/jpeg', 0.80).split(',')[1];
-    }
-
-    async function eseguiChiamataAI() {
-      if (!apiKey || isProcessing) return;
-
-      isProcessing = true;
-      btnForce.disabled = true;
-      decisionEl.innerText = "CALCOLO BRISCOLA...";
+      btnAction.disabled = true;
+      btnAction.innerText = "LETTURA TAVOLO...";
+      decisionEl.innerText = "ANALISI...";
 
       try {
-        captureCanvas.width = 1920;
-        captureCanvas.height = 1080;
-        cCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-        const currentFrameBase64 = captureCanvas.toDataURL('image/jpeg', 0.92).split(',')[1];
+        const srcWidth = video.videoWidth;
+        const srcHeight = video.videoHeight;
 
-        const promptText = `
-        CARTE USCITE (${carteUscite.length}/40): [ ${carteUscite.join(', ') || 'Inizio partita'} ]
-        ${opponentLastSnapshot ? "- Scatto della carta giocata dall'avversario a terra." : ""}
-        - Immagine attuale: mostra la Briscola scoperta sotto il mazzo (box in alto a destra), la carta a terra (se presente) e la mano di Hero in basso.
-        Fornisci la carta ottimale da giocare e spiega il calcolo del vantaggio.
-        `;
+        // CROP TRESETTE (94% larghezza, 72% altezza)
+        const cropW = srcWidth * 0.94;
+        const cropH = srcHeight * 0.72;
+        const cropX = (srcWidth - cropW) / 2;
+        const cropY = (srcHeight - cropH) / 2;
 
-        const parts = [{ text: promptText }];
-        if (opponentLastSnapshot) parts.push({ inline_data: { mime_type: "image/jpeg", data: opponentLastSnapshot } });
-        parts.push({ inline_data: { mime_type: "image/jpeg", data: currentFrameBase64 } });
+        const targetWidth = 1280;
+        canvas.width = targetWidth;
+        canvas.height = (cropH / cropW) * targetWidth;
+
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+
+        const base64Image = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: parts }],
-            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            generationConfig: { response_mime_type: "application/json", temperature: 0.05 }
+            contents: [{
+              role: "user",
+              parts: [
+                { text: SYSTEM_PROMPT },
+                { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+              ]
+            }],
+            generationConfig: {
+              responseMimeType: "application/json"
+            }
           })
         });
 
-        const resData = await response.json();
-        if (resData.error) throw new Error(resData.error.message);
+        const data = await response.json();
+        if (data.error) throw new Error(data.error.message);
 
-        const parsed = JSON.parse(resData.candidates[0].content.parts[0].text);
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const start = rawText.indexOf('{');
+        const end = rawText.lastIndexOf('}');
+        const parsed = JSON.parse(rawText.substring(start, end + 1));
 
-        decisionEl.innerText = `${parsed.carta_consigliata} ➜ ${parsed.azione}`;
-        detailsEl.innerHTML = `
-          • <b>Briscola:</b> ${parsed.seme_briscola || '-'}<br>
-          • <b>Mano:</b> [ ${parsed.carte_mano_hero ? parsed.carte_mano_hero.join(' ') : '-'} ] | <b>A terra:</b> ${parsed.carta_avversario_tavolo || 'Nessuna (Sei primo)'}<br>
-          • <b>Tattica:</b> ${parsed.motivo} (Uscite: ${carteUscite.length + (parsed.nuove_carte_uscite ? parsed.nuove_carte_uscite.length : 0)}/40)
-        `;
-
-        if (parsed.nuove_carte_uscite && Array.isArray(parsed.nuove_carte_uscite)) {
-          carteUscite.push(...parsed.nuove_carte_uscite);
+        // Evidenzia le carte lette in mano
+        if (parsed.mie_carte && Array.isArray(parsed.mie_carte)) {
+          parsed.mie_carte.forEach(c => {
+            const el = document.getElementById(`card-${c}`);
+            if (el) el.className = 'card-badge card-in-hand';
+          });
+          detailsEl.innerText = `Rilevate ${parsed.mie_carte.length} carte in mano: ${parsed.mie_carte.join(', ')}`;
+          decisionEl.innerText = "MANO CARICATA";
         }
-
-        opponentLastSnapshot = null;
 
       } catch (err) {
         decisionEl.innerText = "ERRORE";
         detailsEl.innerText = err.message;
       } finally {
-        isProcessing = false;
-        btnForce.disabled = false;
-        batchCountEl.innerText = "BRISCOLA MASTER ATTIVO";
+        btnAction.disabled = false;
+        btnAction.innerText = "AGGIORNA STATO";
       }
-    }
-
-    btnForce.onclick = () => {
-      if (!isProcessing) eseguiChiamataAI();
     };
-
-    window.addEventListener('keydown', (e) => {
-      if (['Enter', 'NumpadEnter', 'Space', ' '].includes(e.code) || e.key === 'Enter') {
-        e.preventDefault();
-        if (!isProcessing) eseguiChiamataAI();
-      }
-      else if (e.code === 'Numpad0' || e.code === 'Digit0' || e.key === '0') {
-        e.preventDefault();
-        eseguiReset();
-      }
-    });
-
-    window.addEventListener('click', (e) => {
-      if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && !isProcessing) {
-        eseguiChiamataAI();
-      }
-    });
   </script>
 </body>
 </html>
