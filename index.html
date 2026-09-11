@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Tresette 1vs1 Pro Assistant</title>
+  <title>Tresette 1vs1 Auto-Pilot Silent</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: #111; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -22,12 +22,42 @@
       border-radius: 8px; 
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); 
     }
+
+    .roi-indicator {
+      position: absolute;
+      border: 1px solid rgba(255, 255, 0, 0.6);
+      background: rgba(255, 255, 0, 0.15);
+      pointer-events: none;
+    }
+    #roi-center { left: 35%; top: 35%; width: 30%; height: 30%; }
+    #roi-draw { right: 8%; top: 15%; width: 18%; height: 25%; }
     
-    #dashboard { flex: 0 0 auto; background: #1a1a1a; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; max-height: 50vh; overflow-y: auto; }
+    #dashboard { flex: 0 0 auto; background: #1a1a1a; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; max-height: 52vh; overflow-y: auto; }
     
-    .status-row { display: flex; justify-content: space-between; align-items: center; }
-    #decision { font-size: 1.6rem; font-weight: 900; color: #10b981; letter-spacing: 0.5px; }
-    #game-info { font-size: 0.85rem; color: #aaa; }
+    /* BANNER DECISIONE CUBITALE A CODA D'OCCHIO */
+    #decision-box {
+      background: #0f172a;
+      border: 2px solid #334155;
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    #decision { 
+      font-size: 2.6rem; 
+      font-weight: 900; 
+      color: #10b981; 
+      letter-spacing: 1px; 
+      line-height: 1;
+    }
+    #scanner-state { 
+      font-size: 0.85rem; 
+      font-weight: bold; 
+      color: #facc15; 
+      text-transform: uppercase;
+    }
 
     .card-matrix { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: #222; padding: 8px; border-radius: 6px; font-size: 0.75rem; text-align: center; }
     .suit-col { display: flex; flex-direction: column; gap: 2px; }
@@ -43,10 +73,10 @@
     .card-f { color: #22c55e; }
     .card-p { color: #f8fafc; }
 
-    #details { font-size: 0.9rem; color: #ccc; min-height: 2.2em; line-height: 1.4; }
+    #details { font-size: 0.95rem; color: #ddd; min-height: 2.2em; line-height: 1.4; }
 
-    #btn-action { width: 100%; padding: 14px; font-size: 1.1rem; font-weight: bold; color: white; background: #0284c7; border: none; border-radius: 10px; cursor: pointer; }
-    #btn-action:disabled { background: #444; color: #888; }
+    #btn-toggle { width: 100%; padding: 14px; font-size: 1.1rem; font-weight: bold; color: white; background: #10b981; border: none; border-radius: 10px; cursor: pointer; }
+    #btn-toggle.active { background: #ef4444; }
 
     #api-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 100; }
     .modal-content { background: #222; padding: 20px; border-radius: 12px; width: 100%; max-width: 350px; }
@@ -66,67 +96,58 @@
 
   <div id="camera-container">
     <video id="video" autoplay playsinline muted></video>
-    <div id="overlay-box"></div>
+    <div id="overlay-box">
+      <div id="roi-center" class="roi-indicator"></div>
+      <div id="roi-draw" class="roi-indicator"></div>
+    </div>
   </div>
 
   <div id="dashboard">
-    <div class="status-row">
-      <div id="decision">IN ATTESA</div>
-      <div id="game-info">Mazzo: 20</div>
+    <div id="decision-box">
+      <div id="decision">---</div>
+      <div id="scanner-state">LOOP: FERMO</div>
     </div>
 
     <div class="card-matrix">
-      <div class="suit-col" id="col-f">
-        <div class="suit-title card-f">♣ Fiori (F)</div>
-      </div>
-      <div class="suit-col" id="col-d">
-        <div class="suit-title card-d">♦ Denari (D)</div>
-      </div>
-      <div class="suit-col" id="col-c">
-        <div class="suit-title card-c">♥ Cuori (C)</div>
-      </div>
-      <div class="suit-col" id="col-p">
-        <div class="suit-title card-p">♠ Picche (P)</div>
-      </div>
+      <div class="suit-col" id="col-f"><div class="suit-title card-f">♣ Fiori (F)</div></div>
+      <div class="suit-col" id="col-d"><div class="suit-title card-d">♦ Denari (D)</div></div>
+      <div class="suit-col" id="col-c"><div class="suit-title card-c">♥ Cuori (C)</div></div>
+      <div class="suit-col" id="col-p"><div class="suit-title card-p">♠ Picche (P)</div></div>
     </div>
 
-    <div id="details">Inquadra il tavolo ed effettua lo scatto.</div>
-    <button id="btn-action">SCATTA / LEGGI</button>
+    <div id="details">Inquadra il tavolo Sisal e premi AVVIA.</div>
+    <button id="btn-toggle">AVVIA AUTO-PILOT</button>
   </div>
 
-  <canvas id="canvas" style="display: none;"></canvas>
+  <canvas id="canvas-upload" style="display: none;"></canvas>
+  <canvas id="canvas-motion" style="display: none;"></canvas>
 
   <script>
     const SYSTEM_PROMPT = `Sei un lettore OCR per Tresette 1vs1 su Sisal con mazzo francese da 40 carte (rosso e nero).
-Valori ammessi: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
+Valori: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
 
 DISTINZIONE SEMI:
-- CUORI (h): Rosso con due curve in alto e punta in basso.
-- DENARI/QUADRI (d): Rosso a rombo con 4 lati dritti.
-- FIORI (c): Nero a trifoglio con 3 pallini distinti e gambo.
-- PICCHE (s): Nero a cuore rovesciato con punta acuta triangolare in alto.
+- CUORI (h): Rosso, due curve in alto, punta in basso.
+- DENARI/QUADRI (d): Rosso, rombo con lati dritti.
+- FIORI (c): Nero, trifoglio a 3 pallini con gambo.
+- PICCHE (s): Nero, foglia a cuore rovesciato con punta acuta in alto.
 
 Compito:
 1. Riconosci le carte in mano a Hero in basso ("mie_carte").
-2. Se presente, la carta giocata dall'avversario al centro ("carta_oppo_centro").
-3. Se presente, la carta pescata scoperta in alto a destra dall'avversario ("pescata_oppo").
+2. Se presente, la carta giocata al centro ("carta_oppo_centro").
+3. Se presente, la carta pescata scoperta in alto a destra ("pescata_oppo").
 Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
 
     function toItalianCard(code) {
       if (!code || typeof code !== 'string') return null;
       const rank = code.slice(0, -1).toUpperCase();
       const suit = code.slice(-1).toLowerCase();
-      let itSuit = suit;
-      if (suit === 'h') itSuit = 'c';
-      else if (suit === 'd') itSuit = 'd';
-      else if (suit === 'c') itSuit = 'f';
-      else if (suit === 's') itSuit = 'p';
+      let itSuit = suit === 'h' ? 'c' : suit === 'd' ? 'd' : suit === 'c' ? 'f' : suit === 's' ? 'p' : suit;
       return `${rank}${itSuit.toUpperCase()}`;
     }
 
     const POWER = { '3': 10, '2': 9, 'A': 8, 'K': 7, 'Q': 6, 'J': 5, '7': 4, '6': 3, '5': 2, '4': 1 };
     const POINTS = { 'A': 1.0, '3': 0.33, '2': 0.33, 'K': 0.33, 'Q': 0.33, 'J': 0.33, '7': 0, '6': 0, '5': 0, '4': 0 };
-
     const RANKS = ['3', '2', 'A', 'K', 'Q', 'J', '7', '6', '5', '4'];
     const SUITS_IT = ['f', 'd', 'c', 'p'];
 
@@ -154,80 +175,68 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
           const id = `${r}${s.toUpperCase()}`;
           const el = document.getElementById(`card-${id}`);
           if (!el) return;
-
-          if (playedCards.has(id)) {
-            el.className = 'card-badge card-played';
-          } else if (heroHand.includes(id)) {
-            el.className = 'card-badge card-in-hand';
-          } else if (oppoKnownHand.has(id)) {
-            el.className = 'card-badge card-oppo';
-          } else {
-            el.className = 'card-badge';
-          }
+          if (playedCards.has(id)) el.className = 'card-badge card-played';
+          else if (heroHand.includes(id)) el.className = 'card-badge card-in-hand';
+          else if (oppoKnownHand.has(id)) el.className = 'card-badge card-oppo';
+          else el.className = 'card-badge';
         });
       });
     }
 
     function calculateBestMove(oppoCard, myCards) {
-      if (!myCards || myCards.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata in mano" };
-
+      if (!myCards || myCards.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata" };
       const hand = [...myCards];
       const getRank = (c) => c.slice(0, -1);
       const getSuit = (c) => c.slice(-1);
 
       if (!oppoCard) {
-        const lowCards = hand.filter(c => (POINTS[getRank(c)] || 0) === 0)
-                             .sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
+        const lowCards = hand.filter(c => (POINTS[getRank(c)] || 0) === 0).sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
         if (lowCards.length > 0) return { card: lowCards[0], desc: "Apri con scartina a 0 punti per esplorare" };
-
         const padroni = hand.filter(c => getRank(c) === '3');
-        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 per fare presa" };
-
+        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 padrone per fare presa" };
         hand.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
-        return { card: hand[0], desc: "Apertura conservativa con minima" };
+        return { card: hand[0], desc: "Apertura conservativa" };
       }
 
       const oppoRank = getRank(oppoCard);
       const oppoSuit = getSuit(oppoCard);
       const oppoPower = POWER[oppoRank] || 0;
       const isOppoPoint = (POINTS[oppoRank] || 0) > 0;
-
       const legalCards = hand.filter(c => getSuit(c) === oppoSuit);
 
       if (legalCards.length > 0) {
-        const winningCards = legalCards.filter(c => (POWER[getRank(c)] || 0) > oppoPower)
-                                       .sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
-
+        const winningCards = legalCards.filter(c => (POWER[getRank(c)] || 0) > oppoPower).sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
         if (winningCards.length > 0) {
-          return { 
-            card: winningCards[0], 
-            desc: isOppoPoint ? `Prendi i punti avversari con ${winningCards[0]}` : `Supera scartina con ${winningCards[0]}` 
-          };
+          return { card: winningCards[0], desc: isOppoPoint ? `Prendi i punti con ${winningCards[0]}` : `Supera scartina con ${winningCards[0]}` };
         } else {
           legalCards.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
           return { card: legalCards[0], desc: `Cedi presa lisciando la minima (${legalCards[0]})` };
         }
       } else {
-        const trash = hand.filter(c => (POINTS[getRank(c)] || 0) === 0)
-                          .sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
+        const trash = hand.filter(c => (POINTS[getRank(c)] || 0) === 0).sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
         if (trash.length > 0) return { card: trash[0], desc: `Piombo: scarta scartina ${trash[0]}` };
-
         hand.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
         return { card: hand[0], desc: `Sacrifica pezza minore (${hand[0]})` };
       }
     }
 
     const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const btnAction = document.getElementById('btn-action');
+    const canvasUpload = document.getElementById('canvas-upload');
+    const canvasMotion = document.getElementById('canvas-motion');
+    const btnToggle = document.getElementById('btn-toggle');
     const decisionEl = document.getElementById('decision');
+    const decisionBox = document.getElementById('decision-box');
+    const scannerStateEl = document.getElementById('scanner-state');
     const detailsEl = document.getElementById('details');
-    const gameInfoEl = document.getElementById('game-info');
     const apiModal = document.getElementById('api-modal');
     const apiKeyInput = document.getElementById('api-key-input');
     const saveKeyBtn = document.getElementById('save-key-btn');
 
     let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
+    let isAutoPilotRunning = false;
+    let isRequestInProgress = false;
+    let lastScanTimestamp = 0;
+    let prevFrameData = null;
 
     if (apiKey) {
       apiModal.style.display = 'none';
@@ -246,11 +255,7 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1920, min: 1280 },
-            height: { ideal: 1080, min: 720 }
-          },
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920, min: 1280 }, height: { ideal: 1080, min: 720 } },
           audio: false
         });
         video.srcObject = stream;
@@ -261,31 +266,76 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
       }
     }
 
-    btnAction.onclick = async () => {
-      if (!apiKey || !video.videoWidth) return;
+    btnToggle.onclick = () => {
+      isAutoPilotRunning = !isAutoPilotRunning;
+      if (isAutoPilotRunning) {
+        btnToggle.innerText = "FERMA AUTO-PILOT";
+        btnToggle.className = "active";
+        scannerStateEl.innerText = "MONITORING...";
+        requestAnimationFrame(motionDetectionLoop);
+      } else {
+        btnToggle.innerText = "AVVIA AUTO-PILOT";
+        btnToggle.className = "";
+        scannerStateEl.innerText = "LOOP: FERMO";
+      }
+    };
 
-      btnAction.disabled = true;
-      btnAction.innerText = "LETTURA TAVOLO...";
+    function motionDetectionLoop() {
+      if (!isAutoPilotRunning) return;
+
+      if (!isRequestInProgress && Date.now() - lastScanTimestamp > 1800) {
+        const motionScore = checkPixelDelta();
+        if (motionScore > 28) {
+          triggerInference();
+        }
+      }
+      requestAnimationFrame(motionDetectionLoop);
+    }
+
+    function checkPixelDelta() {
+      if (!video.videoWidth) return 0;
+      const mCtx = canvasMotion.getContext('2d', { willReadFrequently: true });
+      canvasMotion.width = 64;
+      canvasMotion.height = 36;
+
+      const srcW = video.videoWidth;
+      const srcH = video.videoHeight;
+      mCtx.drawImage(video, srcW * 0.25, srcH * 0.20, srcW * 0.50, srcH * 0.50, 0, 0, 64, 36);
+
+      const currentData = mCtx.getImageData(0, 0, 64, 36).data;
+      if (!prevFrameData) {
+        prevFrameData = currentData;
+        return 0;
+      }
+
+      let diff = 0;
+      for (let i = 0; i < currentData.length; i += 4) {
+        diff += Math.abs(currentData[i] - prevFrameData[i]);
+      }
+      prevFrameData = currentData;
+      return diff / (64 * 36);
+    }
+
+    async function triggerInference() {
+      isRequestInProgress = true;
+      lastScanTimestamp = Date.now();
+      scannerStateEl.innerText = "LETTURA AI...";
 
       try {
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
-
         const cropW = srcWidth * 0.72;
         const cropH = srcHeight * 0.74;
         const cropX = srcWidth * 0.03;
         const cropY = (srcHeight - cropH) / 2;
 
-        // OTTIMIZZAZIONE VELOCITÀ: 900px e compressione a 0.65 per upload istantaneo
         const targetWidth = 900;
-        canvas.width = targetWidth;
-        canvas.height = (cropH / cropW) * targetWidth;
+        canvasUpload.width = targetWidth;
+        canvasUpload.height = (cropH / cropW) * targetWidth;
 
-        const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-
-        const base64Image = canvas.toDataURL('image/jpeg', 0.65).split(',')[1];
+        const ctx = canvasUpload.getContext('2d');
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvasUpload.width, canvasUpload.height);
+        const base64Image = canvasUpload.toDataURL('image/jpeg', 0.65).split(',')[1];
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
@@ -303,24 +353,13 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
               responseSchema: {
                 type: "OBJECT",
                 properties: {
-                  mie_carte: {
-                    type: "ARRAY",
-                    items: { type: "STRING" }
-                  },
-                  carta_oppo_centro: {
-                    type: "STRING",
-                    nullable: true
-                  },
-                  pescata_oppo: {
-                    type: "STRING",
-                    nullable: true
-                  }
+                  mie_carte: { type: "ARRAY", items: { type: "STRING" } },
+                  carta_oppo_centro: { type: "STRING", nullable: true },
+                  pescata_oppo: { type: "STRING", nullable: true }
                 },
                 required: ["mie_carte"]
               },
-              thinkingConfig: {
-                thinkingLevel: "low"
-              }
+              thinkingConfig: { thinkingLevel: "low" }
             }
           })
         });
@@ -332,18 +371,12 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
         if (!rawText) throw new Error("Risposta vuota");
 
         const parsed = JSON.parse(rawText);
-
-        heroHand = (parsed.mie_carte && Array.isArray(parsed.mie_carte)) 
-          ? parsed.mie_carte.map(toItalianCard).filter(Boolean) 
-          : [];
+        heroHand = (parsed.mie_carte && Array.isArray(parsed.mie_carte)) ? parsed.mie_carte.map(toItalianCard).filter(Boolean) : [];
 
         const pescataOppoIt = toItalianCard(parsed.pescata_oppo);
         const cartaCentroIt = toItalianCard(parsed.carta_oppo_centro);
 
-        if (pescataOppoIt) {
-          oppoKnownHand.add(pescataOppoIt);
-        }
-
+        if (pescataOppoIt) oppoKnownHand.add(pescataOppoIt);
         if (cartaCentroIt) {
           playedCards.add(cartaCentroIt);
           oppoKnownHand.delete(cartaCentroIt);
@@ -352,62 +385,25 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
         if (pescataOppoIt && !cartaCentroIt) {
           decisionEl.innerText = `PESCATA: ${pescataOppoIt}`;
           decisionEl.style.color = "#ef4444";
-          detailsEl.innerHTML = `• Pescata registrata: <b>${pescataOppoIt}</b><br>• Attendi la carta al centro e riscatta.`;
+          decisionBox.style.borderColor = "#ef4444";
+          detailsEl.innerHTML = `• Pescata registrata: <b>${pescataOppoIt}</b>`;
         } else {
           const best = calculateBestMove(cartaCentroIt, heroHand);
           decisionEl.innerText = `GIOCA: ${best.card}`;
           decisionEl.style.color = "#10b981";
-          detailsEl.innerHTML = `
-            • <b>A terra:</b> ${cartaCentroIt || 'Nessuna (Tocca a te)'}<br>
-            • <b>Strategia:</b> ${best.desc}<br>
-            • <b>Mano:</b> ${heroHand.join(' ')}<br>
-            • <b>Carte note oppo:</b> ${Array.from(oppoKnownHand).join(' ') || 'Nessuna'}
-          `;
+          decisionBox.style.borderColor = "#10b981";
+          detailsEl.innerHTML = `• <b>A terra:</b> ${cartaCentroIt || 'Nessuna (Tocca a te)'}<br>• <b>Mossa:</b> ${best.desc}`;
         }
 
-        gameInfoEl.innerText = `Note oppo: ${oppoKnownHand.size}`;
         updateMatrixUI();
-
       } catch (err) {
-        decisionEl.innerText = "ERRORE";
-        decisionEl.style.color = "#ef4444";
+        decisionEl.innerText = "ATTESA...";
         detailsEl.innerText = err.message;
       } finally {
-        btnAction.disabled = false;
-        btnAction.innerText = "SCATTA / LEGGI";
+        isRequestInProgress = false;
+        if (isAutoPilotRunning) scannerStateEl.innerText = "MONITORING...";
       }
-    };
-
-    const triggerShot = () => {
-      if (!btnAction.disabled) btnAction.click();
-    };
-
-    ['keydown', 'keyup'].forEach(eventType => {
-      window.addEventListener(eventType, (e) => {
-        const k = e.key || '';
-        const c = e.code || '';
-
-        if (
-          k.includes('Volume') || 
-          c.includes('Volume') || 
-          k === ' ' || 
-          c === 'Space' || 
-          k === 'Enter' || 
-          c === 'Enter' || 
-          c.startsWith('Numpad')
-        ) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (eventType === 'keydown') triggerShot();
-        }
-      }, { passive: false });
-    });
-
-    window.addEventListener('pointerdown', (e) => {
-      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
-        triggerShot();
-      }
-    });
+    }
   </script>
 </body>
 </html>
