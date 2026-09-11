@@ -98,18 +98,18 @@
 
   <script>
     const SYSTEM_PROMPT = `Sei un lettore OCR per Tresette 1vs1 su Sisal con mazzo francese da 40 carte (rosso e nero).
-Valori: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
+Valori ammessi: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
 
 DISTINZIONE SEMI:
 - CUORI (h): Rosso con due curve in alto e punta in basso.
-- DENARI/QUADRI (d): Rosso a rombo regolare a 4 lati dritti.
-- FIORI (c): Nero a trifoglio con 3 lobi rotondi distinti e gambo.
+- DENARI/QUADRI (d): Rosso a rombo con 4 lati dritti.
+- FIORI (c): Nero a trifoglio con 3 pallini distinti e gambo.
 - PICCHE (s): Nero a cuore rovesciato con punta acuta triangolare in alto.
 
 Compito:
 1. Riconosci le carte in mano a Hero in basso ("mie_carte").
-2. Se presente, la carta giocata al centro dall'avversario ("carta_oppo_centro").
-3. Se presente, la carta scoperta appena pescata in alto a destra dall'avversario ("pescata_oppo").
+2. Se presente, la carta giocata dall'avversario al centro ("carta_oppo_centro").
+3. Se presente, la carta pescata scoperta in alto a destra dall'avversario ("pescata_oppo").
 Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
 
     function toItalianCard(code) {
@@ -181,7 +181,7 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
         if (lowCards.length > 0) return { card: lowCards[0], desc: "Apri con scartina a 0 punti per esplorare" };
 
         const padroni = hand.filter(c => getRank(c) === '3');
-        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 padrone per incassare la presa" };
+        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 per fare presa" };
 
         hand.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
         return { card: hand[0], desc: "Apertura conservativa con minima" };
@@ -286,8 +286,8 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
 
         const base64Image = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
 
-        // ENDPOINT STABILE CON STRUCTURED OUTPUT E ZERO THINKING LAG
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        // CHIAMATA A GEMINI 3.7 FLASH CON THINKING RIDOTTO AL MINIMO
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -319,7 +319,7 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
                 required: ["mie_carte"]
               },
               thinkingConfig: {
-                thinkingBudget: 0
+                thinkingLevel: "low"
               }
             }
           })
