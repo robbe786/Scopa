@@ -38,10 +38,10 @@
     .card-played { background: #181818; color: #555; text-decoration: line-through; }
     .card-oppo { background: #dc2626; color: #fff; font-weight: bold; border: 1px solid #f87171; }
 
-    .card-c { color: #ef4444; } /* Cuori */
-    .card-d { color: #38bdf8; } /* Denari */
-    .card-f { color: #22c55e; } /* Fiori */
-    .card-p { color: #f8fafc; } /* Picche */
+    .card-c { color: #ef4444; }
+    .card-d { color: #38bdf8; }
+    .card-f { color: #22c55e; }
+    .card-p { color: #f8fafc; }
 
     #details { font-size: 0.9rem; color: #ccc; min-height: 2.2em; line-height: 1.4; }
 
@@ -120,8 +120,6 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
   "pescata_oppo": null
 }`;
 
-    // Conversione da formato standard AI a notazione italiana richiesta
-    // h -> c (Cuori), d -> d (Denari), c -> f (Fiori), s -> p (Picche)
     function toItalianCard(code) {
       if (!code || typeof code !== 'string') return null;
       const rank = code.slice(0, -1).toUpperCase();
@@ -178,44 +176,55 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
       });
     }
 
+    // LOGICA DI PRESA BLINDATA (ZERO CARTE FANTASMA)
     function calculateBestMove(oppoCard, myCards) {
-      if (!myCards || myCards.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata" };
+      if (!myCards || myCards.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata in mano" };
 
+      const hand = [...myCards];
+      const getRank = (c) => c.slice(0, -1);
+      const getSuit = (c) => c.slice(-1);
+
+      // TOCCO IO AD APRIRE
       if (!oppoCard) {
-        const lowCards = myCards.filter(c => POINTS[c[0]] === 0).sort((a, b) => POWER[a[0]] - POWER[b[0]]);
-        if (lowCards.length > 0) return { card: lowCards[0], desc: "Apri con scartina bassa a zero punti" };
+        const lowCards = hand.filter(c => (POINTS[getRank(c)] || 0) === 0)
+                             .sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
+        if (lowCards.length > 0) return { card: lowCards[0], desc: "Apri con scartina a 0 punti" };
 
-        const padroni = myCards.filter(c => c[0] === '3');
-        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 per incassare la presa" };
+        const padroni = hand.filter(c => getRank(c) === '3');
+        if (padroni.length > 0) return { card: padroni[0], desc: "Apri con il 3 per fare presa" };
 
-        return { card: myCards[0], desc: "Giocata neutra di apertura" };
+        hand.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
+        return { card: hand[0], desc: "Apertura con carta minima" };
       }
 
-      const oppoRank = oppoCard.slice(0, -1);
-      const oppoSuit = oppoCard.slice(-1);
+      // RISPOSTA ALL'AVVERSARIO
+      const oppoRank = getRank(oppoCard);
+      const oppoSuit = getSuit(oppoCard);
       const oppoPower = POWER[oppoRank] || 0;
       const isOppoPoint = (POINTS[oppoRank] || 0) > 0;
 
-      const legalCards = myCards.filter(c => c.endsWith(oppoSuit));
+      const legalCards = hand.filter(c => getSuit(c) === oppoSuit);
 
       if (legalCards.length > 0) {
-        const winningCards = legalCards.filter(c => POWER[c[0]] > oppoPower).sort((a, b) => POWER[a[0]] - POWER[b[0]]);
+        const winningCards = legalCards.filter(c => (POWER[getRank(c)] || 0) > oppoPower)
+                                       .sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
 
         if (winningCards.length > 0) {
           return { 
             card: winningCards[0], 
-            desc: isOppoPoint ? `Prendi i punti avversari con ${winningCards[0]}` : `Supera la scartina con ${winningCards[0]}` 
+            desc: isOppoPoint ? `Prendi i punti avversari con ${winningCards[0]}` : `Supera scartina con ${winningCards[0]}` 
           };
         } else {
-          legalCards.sort((a, b) => POWER[a[0]] - POWER[b[0]]);
-          return { card: legalCards[0], desc: `Cedi la presa lisciando la minima (${legalCards[0]})` };
+          legalCards.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
+          return { card: legalCards[0], desc: `Cedi presa lisciando la minima (${legalCards[0]})` };
         }
       } else {
-        const trash = myCards.filter(c => POINTS[c[0]] === 0).sort((a, b) => POWER[a[0]] - POWER[b[0]]);
+        const trash = hand.filter(c => (POINTS[getRank(c)] || 0) === 0)
+                          .sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
         if (trash.length > 0) return { card: trash[0], desc: `Piombo: scarta scartina ${trash[0]}` };
 
-        myCards.sort((a, b) => POWER[a[0]] - POWER[b[0]]);
-        return { card: myCards[0], desc: `Sacrifica pezza bassa (${myCards[0]})` };
+        hand.sort((a, b) => (POWER[getRank(a)] || 0) - (POWER[getRank(b)] || 0));
+        return { card: hand[0], desc: `Sacrifica pezza minore (${hand[0]})` };
       }
     }
 
@@ -313,7 +322,6 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
         const end = rawText.lastIndexOf('}');
         const parsed = JSON.parse(rawText.substring(start, end + 1));
 
-        // Conversione carte in notazione italiana (C, D, F, P)
         heroHand = (parsed.mie_carte && Array.isArray(parsed.mie_carte)) 
           ? parsed.mie_carte.map(toItalianCard).filter(Boolean) 
           : [];
@@ -333,7 +341,7 @@ Restituisci ESCLUSIVAMENTE un JSON valido (usa h=cuori, d=denari, c=fiori, s=pic
         if (pescataOppoIt && !cartaCentroIt) {
           decisionEl.innerText = `PESCATA: ${pescataOppoIt}`;
           decisionEl.style.color = "#ef4444";
-          detailsEl.innerHTML = `• Carta avversario memorizzata: <b>${pescataOppoIt}</b><br>• Attendi che giochi al centro e riscatta.`;
+          detailsEl.innerHTML = `• Pescata registrata: <b>${pescataOppoIt}</b><br>• Attendi la carta al centro e riscatta.`;
         } else {
           const best = calculateBestMove(cartaCentroIt, heroHand);
           decisionEl.innerText = `GIOCA: ${best.card}`;
