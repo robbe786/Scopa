@@ -11,13 +11,14 @@
     #camera-container { flex: 1 1 auto; min-height: 0; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
+    /* RIQUADRO ALLUNGATO IN VERTICALE (84% alt, top al 7%) */
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
-      width: 72%; 
-      height: 74%; 
+      width: 74%; 
+      height: 84%; 
       left: 3%; 
-      top: 13%; 
+      top: 7%; 
       pointer-events: none; 
       border-radius: 8px; 
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); 
@@ -30,11 +31,10 @@
       pointer-events: none;
     }
     #roi-center { left: 35%; top: 35%; width: 30%; height: 30%; }
-    #roi-draw { right: 8%; top: 15%; width: 18%; height: 25%; }
+    #roi-draw { right: 8%; top: 10%; width: 20%; height: 26%; }
     
     #dashboard { flex: 0 0 auto; background: #1a1a1a; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; max-height: 52vh; overflow-y: auto; }
     
-    /* BANNER DECISIONE CUBITALE A CODA D'OCCHIO */
     #decision-box {
       background: #0f172a;
       border: 2px solid #334155;
@@ -123,20 +123,21 @@
   <canvas id="canvas-motion" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un lettore OCR per Tresette 1vs1 su Sisal con mazzo francese da 40 carte (rosso e nero).
-Valori: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
+    const SYSTEM_PROMPT = `Sei un lettore OCR specializzato per Tresette 1vs1 su Sisal con mazzo francese da 40 carte (rosso e nero).
+Valori ammessi: A, 2, 3, 4, 5, 6, 7, J, Q, K. (8, 9, 10 NON ESISTONO).
 
-DISTINZIONE SEMI:
-- CUORI (h): Rosso, due curve in alto, punta in basso.
-- DENARI/QUADRI (d): Rosso, rombo con lati dritti.
-- FIORI (c): Nero, trifoglio a 3 pallini con gambo.
-- PICCHE (s): Nero, foglia a cuore rovesciato con punta acuta in alto.
+ATTENZIONE DISTINZIONE SEMI E CARTE:
+- Conta con precisione estrema TUTTE le carte in mano a Hero in basso (possono essere fino a 10).
+- FIORI (c): Nero, tre lobi arrotondati (trifoglio) con gambo alla base. Non confondere con Picche.
+- PICCHE (s): Nero, foglia a cuore rovesciato con punta acuta evidente rivolta verso l'alto.
+- CUORI (h): Rosso, due curve arrotondate in alto e punta in basso.
+- DENARI/QUADRI (d): Rosso, rombo con quattro lati dritti.
 
 Compito:
-1. Riconosci le carte in mano a Hero in basso ("mie_carte").
-2. Se presente, la carta giocata al centro ("carta_oppo_centro").
-3. Se presente, la carta pescata scoperta in alto a destra ("pescata_oppo").
-Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
+1. "mie_carte": array con TUTTE le carte in mano a Hero in basso.
+2. "carta_oppo_centro": carta singola giocata al centro dall'avversario (se presente).
+3. "pescata_oppo": carta singola scoperta in alto a destra dall'avversario (se presente).
+Formato output: codice valore + seme (es. Ah, 3c, 2s, Kd).`;
 
     function toItalianCard(code) {
       if (!code || typeof code !== 'string') return null;
@@ -285,7 +286,7 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
 
       if (!isRequestInProgress && Date.now() - lastScanTimestamp > 1800) {
         const motionScore = checkPixelDelta();
-        if (motionScore > 28) {
+        if (motionScore > 26) {
           triggerInference();
         }
       }
@@ -300,7 +301,7 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
 
       const srcW = video.videoWidth;
       const srcH = video.videoHeight;
-      mCtx.drawImage(video, srcW * 0.25, srcH * 0.20, srcW * 0.50, srcH * 0.50, 0, 0, 64, 36);
+      mCtx.drawImage(video, srcW * 0.25, srcH * 0.15, srcW * 0.50, srcH * 0.60, 0, 0, 64, 36);
 
       const currentData = mCtx.getImageData(0, 0, 64, 36).data;
       if (!prevFrameData) {
@@ -324,18 +325,24 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
       try {
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
-        const cropW = srcWidth * 0.72;
-        const cropH = srcHeight * 0.74;
+        
+        // RITAGLIO ALLUNGATO: copre dal 7% in alto all'84% di altezza
+        const cropW = srcWidth * 0.74;
+        const cropH = srcHeight * 0.84;
         const cropX = srcWidth * 0.03;
-        const cropY = (srcHeight - cropH) / 2;
+        const cropY = srcHeight * 0.07;
 
-        const targetWidth = 900;
+        // RISOLUZIONE POTENZIATA: 1100px a qualità 0.78 per OCR nitido sui semi
+        const targetWidth = 1100;
         canvasUpload.width = targetWidth;
         canvasUpload.height = (cropH / cropW) * targetWidth;
 
         const ctx = canvasUpload.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvasUpload.width, canvasUpload.height);
-        const base64Image = canvasUpload.toDataURL('image/jpeg', 0.65).split(',')[1];
+        
+        const base64Image = canvasUpload.toDataURL('image/jpeg', 0.78).split(',')[1];
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
@@ -392,7 +399,7 @@ Formato semi: h=cuori, d=denari, c=fiori, s=picche.`;
           decisionEl.innerText = `GIOCA: ${best.card}`;
           decisionEl.style.color = "#10b981";
           decisionBox.style.borderColor = "#10b981";
-          detailsEl.innerHTML = `• <b>A terra:</b> ${cartaCentroIt || 'Nessuna (Tocca a te)'}<br>• <b>Mossa:</b> ${best.desc}`;
+          detailsEl.innerHTML = `• <b>A terra:</b> ${cartaCentroIt || 'Nessuna (Tocca a te)'}<br>• <b>Mano (${heroHand.length}):</b> ${heroHand.join(' ')}<br>• <b>Mossa:</b> ${best.desc}`;
         }
 
         updateMatrixUI();
