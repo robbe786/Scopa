@@ -97,8 +97,13 @@
   <canvas id="canvas" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un computer vision per Tresette 1vs1 su Sisal con carte francesi da 40 carte.
-Valori: A, 2, 3, 4, 5, 6, 7, J, Q, K di Cuori(h), Quadri(d), Fiori(c), Picche(s). Non esistono 8, 9 e 10.
+    const SYSTEM_PROMPT = `Sei un computer vision per Tresette 1vs1 su Sisal con mazzo francese standard a 40 carte (bicolore: rosso e nero).
+Valori ammessi: A, 2, 3, 4, 5, 6, 7, J, Q, K di Cuori(h), Quadri(d), Fiori(c), Picche(s). (8, 9 e 10 NON ESISTONO).
+
+ATTENZIONE MASSIMA DISTINZIONE SEMI NERI (Fiori vs Picche):
+- FIORI (c): Simbolo a trifoglio formato da 3 lobi/pallini arrotondati distinti con gambo sottile.
+- PICCHE (s): Simbolo a foglia con PUNTA ACUTA e triangolare rivolta verso l'alto.
+Guarda attentamente l'indice in alto a sinistra di ciascuna carta per non scambiare MAI 'c' con 's'.
 
 Compito:
 1. Riconosci TUTTE le carte in mano a Hero in basso ("mie_carte").
@@ -256,7 +261,7 @@ Restituisci ESCLUSIVAMENTE un JSON valido:
         const cropX = srcWidth * 0.03;
         const cropY = (srcHeight - cropH) / 2;
 
-        const targetWidth = 1280;
+        const targetWidth = 1400;
         canvas.width = targetWidth;
         canvas.height = (cropH / cropW) * targetWidth;
 
@@ -304,7 +309,6 @@ Restituisci ESCLUSIVAMENTE un JSON valido:
           oppoKnownHand.delete(parsed.carta_oppo_centro);
         }
 
-        // GESTIONE INTELLIGENTE: SCATTO PESCATA vs SCATTO DECISIONE
         if (parsed.pescata_oppo && !parsed.carta_oppo_centro) {
           decisionEl.innerText = `PESCATA: ${parsed.pescata_oppo}`;
           decisionEl.style.color = "#ef4444";
@@ -333,7 +337,6 @@ Restituisci ESCLUSIVAMENTE un JSON valido:
       }
     };
 
-    // INTERCETTAZIONE DIRETTA TASTI E OTTURATORE BLUETOOTH
     const triggerShot = () => {
       if (!btnAction.disabled) btnAction.click();
     };
