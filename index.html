@@ -11,44 +11,48 @@
     #camera-container { flex: 1 1 auto; min-height: 0; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* OVERLAY TRESETTE CALIBRATO (72% ALTEZZA, 94% LARGHEZZA) */
+    /* OVERLAY TRESETTE CALIBRATO SUL PANNO VERDE (ESCLUDE COLONNA DESTRA) */
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
-      width: 94%; 
-      height: 72%; 
+      width: 72%; 
+      height: 74%; 
+      left: 3%; 
+      top: 13%; 
       pointer-events: none; 
       border-radius: 8px; 
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); 
     }
     
-    #dashboard { flex: 0 0 auto; background: #1a1a1a; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; max-height: 48vh; overflow-y: auto; }
+    #dashboard { flex: 0 0 auto; background: #1a1a1a; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #333; max-height: 50vh; overflow-y: auto; }
     
     .status-row { display: flex; justify-content: space-between; align-items: center; }
-    #decision { font-size: 1.5rem; font-weight: 900; color: #10b981; }
+    #decision { font-size: 1.6rem; font-weight: 900; color: #10b981; }
     #game-info { font-size: 0.85rem; color: #aaa; }
 
-    /* PANNELLO TRACCIATURA CARTE */
+    /* MATRICE DELLE 40 CARTE */
     .card-matrix { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: #222; padding: 8px; border-radius: 6px; font-size: 0.75rem; text-align: center; }
     .suit-col { display: flex; flex-direction: column; gap: 2px; }
     .suit-title { font-weight: bold; padding-bottom: 2px; border-bottom: 1px solid #444; margin-bottom: 2px; }
     
-    .card-badge { padding: 2px 0; border-radius: 3px; background: #2e2e2e; font-family: monospace; font-size: 0.8rem; }
-    .card-in-hand { background: #0284c7; color: #fff; font-weight: bold; }
-    .card-played { background: #1f1f1f; color: #555; text-decoration: line-through; }
-    .card-oppo { background: #dc2626; color: #fff; font-weight: bold; }
+    .card-badge { padding: 3px 0; border-radius: 3px; background: #2e2e2e; font-family: monospace; font-size: 0.8rem; }
+    .card-in-hand { background: #0284c7; color: #fff; font-weight: bold; border: 1px solid #38bdf8; }
+    .card-played { background: #181818; color: #555; text-decoration: line-through; }
+    .card-oppo { background: #b91c1c; color: #fff; font-weight: bold; }
 
     .card-h { color: #ef4444; }
     .card-d { color: #38bdf8; }
     .card-c { color: #22c55e; }
     .card-s { color: #f8fafc; }
 
+    #details { font-size: 0.9rem; color: #ccc; min-height: 2.2em; line-height: 1.4; }
+
     #btn-action { width: 100%; padding: 14px; font-size: 1.1rem; font-weight: bold; color: white; background: #0284c7; border: none; border-radius: 10px; cursor: pointer; }
     #btn-action:disabled { background: #444; color: #888; }
 
     #api-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 100; }
     .modal-content { background: #222; padding: 20px; border-radius: 12px; width: 100%; max-width: 350px; }
-    .modal-content input { width: 100%; padding: 12px; margin: 12px 0; border-radius: 6px; border: 1px solid #444; background: #111; color: white; }
+    .modal-content input { width: 100%; padding: 12px; margin: 12px 0; border-radius: 6px; border: 1px solid #444; background: #111; color: white; font-size: 0.95rem; }
     .modal-content button { width: 100%; padding: 12px; background: #0284c7; border: none; border-radius: 6px; color: white; font-weight: bold; }
   </style>
 </head>
@@ -57,7 +61,7 @@
   <div id="api-modal">
     <div class="modal-content">
       <h3>Gemini API Key</h3>
-      <input type="text" id="api-key-input" placeholder="Incolla chiave...">
+      <input type="text" id="api-key-input" placeholder="Incolla chiave AQ...">
       <button id="save-key-btn">Salva</button>
     </div>
   </div>
@@ -69,11 +73,11 @@
 
   <div id="dashboard">
     <div class="status-row">
-      <div id="decision">IN ATTESA AVVIO</div>
-      <div id="game-info">Mano 1/20 • Mazzo: 20</div>
+      <div id="decision">IN ATTESA</div>
+      <div id="game-info">Mano 1/20</div>
     </div>
 
-    <!-- MATRICE DELLE 40 CARTE (TRACCIAMENTO) -->
+    <!-- MATRICE DELLE 40 CARTE -->
     <div class="card-matrix">
       <div class="suit-col" id="col-c">
         <div class="suit-title card-c">♣ Fiori</div>
@@ -89,31 +93,41 @@
       </div>
     </div>
 
-    <div id="details" style="font-size: 0.85rem; color: #ccc;">Inquadra il tavolo Sisal e scatta a inizio smazzata.</div>
-    <button id="btn-action">LEGGI MANO INIZIALE (10 CARTE)</button>
+    <div id="details">Inquadra il tavolo Sisal ed effettua lo scatto.</div>
+    <button id="btn-action">SCATTA E ANALIZZA</button>
   </div>
 
   <canvas id="canvas" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un computer vision specializzato nel Tresette 1vs1 (mazzo francese da 40 carte: A, 2, 3, 4, 5, 6, 7, J, Q, K di Cuori(h), Quadri(d), Fiori(c), Picche(s)). 8, 9 e 10 non esistono.
+    const SYSTEM_PROMPT = `Sei un computer vision per Tresette 1vs1 su Sisal con carte francesi da 40 carte.
+Valori: A, 2, 3, 4, 5, 6, 7, J, Q, K di Cuori(h), Quadri(d), Fiori(c), Picche(s). Non esistono 8, 9 e 10.
 
 Compito:
-1. Riconosci le 10 carte nella mano di Hero in basso (valore + seme).
-2. Se presente, riconosci la carta giocata al centro dall'avversario.
-3. Se presente, riconosci la carta pescata scoperta in alto a destra dall'avversario.
+1. Riconosci TUTTE le carte visibili nella mano di Hero in basso ("mie_carte").
+2. Se presente, riconosci la carta giocata dall'avversario al centro ("carta_oppo_centro").
+3. Se presente, riconosci la carta scoperta appena pescata dall'avversario in alto a destra ("pescata_oppo").
 
 Restituisci ESCLUSIVAMENTE un JSON:
 {
-  "mie_carte": ["3h", "Ad", "7c", ...],
-  "carta_avversario_centro": "4h" o null,
-  "pescata_avversario": "2s" o null
+  "mie_carte": ["3h", "Ad", "7c"],
+  "carta_oppo_centro": "Kh",
+  "pescata_oppo": null
 }`;
+
+    // Gerarchia di presa del Tresette (3 batte 2, 2 batte Asso, ecc.)
+    const POWER = { '3': 10, '2': 9, 'A': 8, 'K': 7, 'Q': 6, 'J': 5, '7': 4, '6': 3, '5': 2, '4': 1 };
+    // Punti effettivi (Asso = 1, figure e 2-3 = 0.33, scartine = 0)
+    const POINTS = { 'A': 1.0, '3': 0.33, '2': 0.33, 'K': 0.33, 'Q': 0.33, 'J': 0.33, '7': 0, '6': 0, '5': 0, '4': 0 };
 
     const RANKS = ['3', '2', 'A', 'K', 'Q', 'J', '7', '6', '5', '4'];
     const SUITS = ['c', 'd', 'h', 's'];
-    
-    // Inizializza visualmente le 40 carte
+
+    // Stato locale del mazzo
+    let heroHand = [];
+    let oppoKnownHand = new Set();
+    let playedCards = new Set();
+
     function initMatrix() {
       SUITS.forEach(s => {
         const col = document.getElementById(`col-${s}`);
@@ -127,6 +141,85 @@ Restituisci ESCLUSIVAMENTE un JSON:
       });
     }
     initMatrix();
+
+    function updateMatrixUI() {
+      SUITS.forEach(s => {
+        RANKS.forEach(r => {
+          const id = `${r}${s}`;
+          const el = document.getElementById(`card-${id}`);
+          if (!el) return;
+
+          if (playedCards.has(id)) {
+            el.className = 'card-badge card-played';
+          } else if (heroHand.includes(id)) {
+            el.className = 'card-badge card-in-hand';
+          } else if (oppoKnownHand.has(id)) {
+            el.className = 'card-badge card-oppo';
+          } else {
+            el.className = 'card-badge';
+          }
+        });
+      });
+    }
+
+    // MOTORE DETERMINISTICO DI PRESA TRESETTE
+    function calculateBestMove(oppoCard, myCards) {
+      if (!myCards || myCards.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata" };
+
+      // CASO 1: TOCCO IO AD APRIRE LA MANO (Nessuna carta al centro)
+      if (!oppoCard) {
+        // Cerca di uscire con una scartina bassa (4, 5, 6, 7) per esplorare senza regalare punti
+        const lowCards = myCards.filter(c => POINTS[c[0]] === 0).sort((a, b) => POWER[a[0]] - POWER[b[0]]);
+        if (lowCards.length > 0) {
+          return { card: lowCards[0], desc: "Apri con scartina bassa a zero punti" };
+        }
+        // Altrimenti esci con il 3 padrone se ce l'hai
+        const padroni = myCards.filter(c => c[0] === '3');
+        if (padroni.length > 0) {
+          return { card: padroni[0], desc: "Apri con il 3 per incassare la presa" };
+        }
+        return { card: myCards[0], desc: "Giocata neutra di apertura" };
+      }
+
+      // CASO 2: L'OPPO HA GIOCATO UNA CARTA (Obbligo di risposta a seme)
+      const oppoRank = oppoCard.slice(0, -1);
+      const oppoSuit = oppoCard.slice(-1);
+      const oppoPower = POWER[oppoRank] || 0;
+      const isOppoPoint = (POINTS[oppoRank] || 0) > 0;
+
+      // Carte legali dello stesso seme
+      const legalCards = myCards.filter(c => c.endsWith(oppoSuit));
+
+      if (legalCards.length > 0) {
+        // Ho carte del seme di uscita: DEVO rispondere a seme
+        const winningCards = legalCards.filter(c => POWER[c[0]] > oppoPower).sort((a, b) => POWER[a[0]] - POWER[b[0]]);
+
+        if (winningCards.length > 0) {
+          // Posso superare la carta dell'avversario
+          if (isOppoPoint) {
+            // L'oppo ha messo punti (Asso, figura o 2/3): conviene prendere!
+            return { card: winningCards[0], desc: `Prendi i punti a terra con ${winningCards[0]}` };
+          } else {
+            // L'oppo ha messo una scartina: prendi con la carta più economica che supera la sua
+            return { card: winningCards[0], desc: `Supera la scartina dell'avversario con ${winningCards[0]}` };
+          }
+        } else {
+          // Non posso superare la sua carta: cedo la presa con la carta più bassa del seme
+          legalCards.sort((a, b) => POWER[a[0]] - POWER[b[0]]);
+          return { card: legalCards[0], desc: `Cedi la presa lisciando la carta più bassa (${legalCards[0]})` };
+        }
+      } else {
+        // NON HO IL SEME: posso scartare liberamente qualsiasi carta
+        // Cerco scartine a 0 punti da buttare via
+        const trash = myCards.filter(c => POINTS[c[0]] === 0).sort((a, b) => POWER[a[0]] - POWER[b[0]]);
+        if (trash.length > 0) {
+          return { card: trash[0], desc: `Piombo/Scarto gratuito: elimina scartina ${trash[0]}` };
+        }
+        // Se ho solo punti, scarto la pezza meno rilevante
+        myCards.sort((a, b) => POWER[a[0]] - POWER[b[0]]);
+        return { card: myCards[0], desc: `Nessuna scartina: sacrifica la pezza più bassa (${myCards[0]})` };
+      }
+    }
 
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -182,10 +275,10 @@ Restituisci ESCLUSIVAMENTE un JSON:
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
 
-        // CROP TRESETTE (94% larghezza, 72% altezza)
-        const cropW = srcWidth * 0.94;
-        const cropH = srcHeight * 0.72;
-        const cropX = (srcWidth - cropW) / 2;
+        // CROP OTTIMIZZATO: 72% larghezza ancorata a sinistra, 74% altezza
+        const cropW = srcWidth * 0.72;
+        const cropH = srcHeight * 0.74;
+        const cropX = srcWidth * 0.03;
         const cropY = (srcHeight - cropH) / 2;
 
         const targetWidth = 1280;
@@ -223,22 +316,32 @@ Restituisci ESCLUSIVAMENTE un JSON:
         const end = rawText.lastIndexOf('}');
         const parsed = JSON.parse(rawText.substring(start, end + 1));
 
-        // Evidenzia le carte lette in mano
         if (parsed.mie_carte && Array.isArray(parsed.mie_carte)) {
-          parsed.mie_carte.forEach(c => {
-            const el = document.getElementById(`card-${c}`);
-            if (el) el.className = 'card-badge card-in-hand';
-          });
-          detailsEl.innerText = `Rilevate ${parsed.mie_carte.length} carte in mano: ${parsed.mie_carte.join(', ')}`;
-          decisionEl.innerText = "MANO CARICATA";
+          heroHand = parsed.mie_carte;
         }
+
+        if (parsed.pescata_oppo) {
+          oppoKnownHand.add(parsed.pescata_oppo);
+        }
+
+        // Calcola la giocata ideale in tempo reale tramite logica locale
+        const best = calculateBestMove(parsed.carta_oppo_centro, heroHand);
+
+        decisionEl.innerText = `GIOCA: ${best.card}`;
+        detailsEl.innerHTML = `
+          • <b>A terra:</b> ${parsed.carta_oppo_centro || 'Nessuna (Tocca a te)'}<br>
+          • <b>Strategia:</b> ${best.desc}<br>
+          • <b>Tua mano:</b> ${heroHand.join(', ')}
+        `;
+
+        updateMatrixUI();
 
       } catch (err) {
         decisionEl.innerText = "ERRORE";
         detailsEl.innerText = err.message;
       } finally {
         btnAction.disabled = false;
-        btnAction.innerText = "AGGIORNA STATO";
+        btnAction.innerText = "SCATTA E ANALIZZA";
       }
     };
   </script>
