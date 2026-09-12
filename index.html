@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Scopone 4 in 2 - Motore Chitarrella Anti-Scopa</title>
+  <title>Scopone 4 in 2 - Master Solver</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: #0b0f19; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -11,6 +11,7 @@
     #camera-container { flex: 1 1 auto; min-height: 0; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
+    /* Overlay calibrato esattamente a 35 cm dal monitor */
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
@@ -35,11 +36,11 @@
       align-items: center;
     }
     #decision { 
-      font-size: 2.2rem; 
+      font-size: 2rem; 
       font-weight: 900; 
       color: #10b981; 
       letter-spacing: 0.5px; 
-      line-height: 1;
+      line-height: 1.1;
     }
     #active-player { 
       font-size: 0.85rem; 
@@ -50,7 +51,6 @@
       padding: 4px 8px;
       border-radius: 4px;
       border: 1px solid #334155;
-      cursor: pointer;
     }
 
     #tactic-box {
@@ -58,10 +58,10 @@
       padding: 8px 10px;
       border-radius: 6px;
       border-left: 4px solid #38bdf8;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       line-height: 1.35;
       color: #f3f4f6;
-      min-height: 2.6em;
+      min-height: 2.8em;
     }
 
     .state-grid {
@@ -136,16 +136,16 @@
   <div id="dashboard">
     <div id="decision-box">
       <div id="decision">PRONTO</div>
-      <div id="active-player" title="Tocca per correggere manualmente il turno">STANDBY</div>
+      <div id="active-player">STANDBY</div>
     </div>
 
-    <div id="tactic-box">NUOVA SMAZZATA al turno 1, poi scatta col telecomando.</div>
+    <div id="tactic-box">NUOVA SMAZZATA al round 1, poi scatta con il telecomando quando tocca a te.</div>
 
     <div class="state-grid">
       <div class="pill" id="pill-nord">Nord: -</div>
       <div class="pill" id="pill-sud">Sud: -</div>
       <div class="pill pill-full" id="pill-table">Terra: -</div>
-      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Conteggio Scopone: Inizializzato</div>
+      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Carte Nemici: 20/20 note</div>
     </div>
 
     <div class="action-row">
@@ -157,251 +157,48 @@
   <canvas id="canvas-upload" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un lettore OCR scientifico per carte da gioco francesi (mazzo da 40 carte, senza 8, 9, 10).
+    const SYSTEM_PROMPT = `Sei il Campione Mondiale e Grande Maestro di Scopone Scientifico. Mi assisti in una partita 4 in 2 (io controllo SUD e NORD, l'avversario controlla EST e OVEST).
 
-VALORI E RANGHI:
-- A = 1
-- 2, 3, 4, 5, 6, 7 = valore nominale
-- J (Fante) = 8
-- Q (Regina/Donna) = 9
-- K (Re) = 10
+REGOLE DEL TAVOLO (MAZZO FRANCESE DA 40 CARTE, SENZA 8, 9, 10):
+- Valori: Asso=1, 2..7 valore nominale, J (Fante)=8, Q (Donna)=9, K (Re)=10.
+- Semi: C (Cuori), Q (Quadri/Denari), F (Fiori), P (Picche).
+- PRESA SINGOLA OBBLIGATORIA: Se giochi una carta di valore X e a terra c'è sia una carta singola X sia una combinazione la cui somma fa X, SEI OBBLIGATO a prendere la carta singola.
+- NESSUN OBBLIGO DI PRESA: Sono libero di giocare qualsiasi carta ho in mano (posso scartare anche se ho una presa).
+- Punti classici: Carte (21+), Quadri (6+), Settebello (7Q), Primiera (7 > 6 > A), Scope.
 
-SEMI:
-- Q = Quadri (rosso, rombo)
-- C = Cuori (rosso, due lobi curvi in cima)
-- P = Picche (nero, foglia con unica punta acuta in alto)
-- F = Fiori (nero, trifoglio con 3 cerchietti)
+IDENTIFICAZIONE TURNO ATTIVO ("tocca_a"):
+- Controlla i box "(ospite ...)" sopra Nord e sotto Sud:
+  * Quello ATTIVO NON È VERDE (è arancione o giallo lampeggiante, con timer o carta alzata).
+  * Se in alto non è verde -> "NORD". Se in basso non è verde -> "SUD".
 
-TURNO ATTIVO ("tocca_a"):
-- Controlla i box "(ospite ...)":
-  * Se in alto a Nord non è verde (arancione/giallo) -> "NORD".
-  * Se in basso a Sud non è verde (arancione/giallo) -> "SUD".
+EQUAZIONE DI BILANCIO PRESE AVVERSARIE (MEMORIA STORICA):
+A ogni nuova immagine, confronta il tavolo attuale con quello dell'immagine precedente:
+1. Identifica le carte sparite a terra.
+2. Se sono sparite carte per effetto del turno avversario:
+   - Se è sparita una carta singola X -> l'avversario ha preso con un X da mano. Rimuovi un X dal pool nemico residuo.
+   - Se sono sparite più carte la cui somma fa S <= 10 -> l'avversario ha preso con una carta di valore S da mano. Rimuovi una carta di valore S dal pool nemico residuo.
+3. Tieni traccia rigorosa delle carte nemiche ancora vive (iniziano a 20).
 
-COMPITO:
-1. "mano_nord": carte visibili in alto da sinistra a destra.
-2. "mano_sud": carte visibili in basso da sinistra a destra.
-3. "tavolo": carte scoperte a terra al centro (ignora Sisal.it).
-4. "tocca_a": "SUD" o "NORD".
-Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
+VINCOLO FERREO SUL RESIDUO ANTI-SCOPA:
+- Se valuti una presa che NON fa scopa, calcola esattamente cosa RIMANE a terra.
+- Se il residuo a terra è una carta singola o ha somma totale <= 10: controlla se i nemici hanno ancora nel loro pool la carta corrispondente per fare scopa.
+- SE I NEMICI POSSIEDONO QUELLA CARTA: QUELLA PRESA È FORMALMENTE VIETATA. Devi preferire un'altra carta o uno scarto che porti la somma del tavolo a un valore > 10 non prendibile in colpo singolo.
 
-    // SCALA UFFICIALE RIGIDA
-    const CARD_VALUES = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, 'J': 8, 'Q': 9, 'K': 10 };
-    const VALUE_TO_RANK = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: 'J', 9: 'Q', 10: 'K' };
-    const PRIMIERA_POINTS = { '7': 21, '6': 18, 'A': 16, '5': 15, '4': 14, '3': 13, '2': 12, 'J': 10, 'Q': 10, 'K': 10 };
+STRATEGIA A CATENA (Mano A -> Nemico -> Mano B):
+- Tra la mano attiva e il tuo alleato gioca un avversario.
+- Puoi preparare il tavolo per il compagno SOLO se il valore o la somma lasciata è totalmente assente dalle carte in possesso dell'avversario intermedio.
 
-    let deadRanks = { 'A': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, 'J': 0, 'Q': 0, 'K': 0 };
-    let previousTableCards = [];
-    let lastHeroCardPlayed = null;
-    let turnCount = 0;
-
-    function resetDeck() {
-      deadRanks = { 'A': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, 'J': 0, 'Q': 0, 'K': 0 };
-      previousTableCards = [];
-      lastHeroCardPlayed = null;
-      turnCount = 0;
-      currentActiveTurn = "SUD";
-      document.getElementById('pill-tracker').innerText = `Carte Uscite: 0/40`;
-      document.getElementById('tactic-box').innerText = "Mazzo resettato. Pronto per il primo scatto.";
-      document.getElementById('active-player').innerText = "STANDBY";
-    }
-
-    function parseCard(code) {
-      if (!code || typeof code !== 'string') return null;
-      const clean = code.trim().toUpperCase();
-      const rank = clean.slice(0, -1);
-      const suit = clean.slice(-1);
-      const val = CARD_VALUES[rank];
-      if (!val || !['C', 'Q', 'F', 'P'].includes(suit)) return null;
-      return { code: `${rank}${suit}`, rank, suit, val, primiera: PRIMIERA_POINTS[rank] || 0 };
-    }
-
-    function runDeduction(currentTable) {
-      if (lastHeroCardPlayed) {
-        const parsedHero = parseCard(lastHeroCardPlayed);
-        if (parsedHero && deadRanks[parsedHero.rank] < 4) {
-          deadRanks[parsedHero.rank]++;
-        }
-        lastHeroCardPlayed = null;
-      }
-
-      if (previousTableCards.length > 0) {
-        const missingCards = previousTableCards.filter(c => !currentTable.includes(c));
-        if (missingCards.length > 0) {
-          let sumTaken = 0;
-          missingCards.forEach(cStr => {
-            const p = parseCard(cStr);
-            if (p) {
-              sumTaken += p.val;
-              if (deadRanks[p.rank] < 4) deadRanks[p.rank]++;
-            }
-          });
-
-          if (sumTaken <= 10 && sumTaken > 0) {
-            const deducedRank = VALUE_TO_RANK[sumTaken];
-            if (deducedRank && deadRanks[deducedRank] < 4) {
-              deadRanks[deducedRank]++;
-            }
-          }
-        }
-      }
-
-      previousTableCards = [...currentTable];
-      let totalDead = Object.values(deadRanks).reduce((a, b) => a + b, 0);
-      document.getElementById('pill-tracker').innerText = `Carte Uscite Dedotte: ~${totalDead}/40`;
-    }
-
-    function getLegalTakes(card, table) {
-      // Regola ufficiale di presa: se c'è carta singola uguale, presa singola OBBLIGATORIA
-      const singleMatch = table.filter(t => t.val === card.val);
-      if (singleMatch.length > 0) return singleMatch.map(t => [t]);
-
-      const results = [];
-      function findCombos(startIndex, currentSum, currentCombo) {
-        if (currentSum === card.val) {
-          results.push([...currentCombo]);
-          return;
-        }
-        if (currentSum > card.val) return;
-        for (let i = startIndex; i < table.length; i++) {
-          currentCombo.push(table[i]);
-          findCombos(i + 1, currentSum + table[i].val, currentCombo);
-          currentCombo.pop();
-        }
-      }
-      findCombos(0, 0, []);
-      return results;
-    }
-
-    function getRemainingEnemyCards(rank, activeHand, partnerHand, table) {
-      let alreadyVisible = 0;
-      activeHand.forEach(c => { if (c.rank === rank) alreadyVisible++; });
-      partnerHand.forEach(c => { if (c.rank === rank) alreadyVisible++; });
-      table.forEach(c => { if (c.rank === rank) alreadyVisible++; });
-
-      const dead = deadRanks[rank] || 0;
-      return Math.max(0, 4 - dead - alreadyVisible);
-    }
-
-    // MOTORE CHITARRELLA CON PROTEZIONE TOTALE ANTI-SCOPA
-    function scoponeMasterEngine(activeHandRaw, partnerHandRaw, tableRaw, activePlayerName) {
-      const activeHand = activeHandRaw.map(parseCard).filter(Boolean);
-      const partnerHand = partnerHandRaw.map(parseCard).filter(Boolean);
-      const table = tableRaw.map(parseCard).filter(Boolean);
-
-      if (activeHand.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata in mano" };
-
-      let bestOption = null;
-      let highestScore = -9999999;
-
-      for (const card of activeHand) {
-        const takes = getLegalTakes(card, table);
-
-        if (takes.length > 0) {
-          // OPZIONI CON PRESA: Sempre preferite rispetto allo scarto
-          for (const take of takes) {
-            let score = 5000; // Priorità assoluta a prendere carte dal tavolo
-            let notes = [];
-
-            // SCOPA NOSTRA
-            if (take.length === table.length) {
-              score += 20000;
-              notes.push("⭐ SCOPA NOSTRA!");
-            }
-
-            // SETTEBELLO (7Q)
-            const is7Q = (c) => c.rank === '7' && c.suit === 'Q';
-            if (is7Q(card) || take.some(is7Q)) {
-              score += 10000;
-              notes.push("Prende Settebello (7Q)");
-            }
-
-            // PRIMIERA (7 > 6 > A)
-            const primieraGained = take.reduce((acc, c) => acc + c.primiera, 0) + card.primiera;
-            score += primieraGained * 50;
-
-            // DENARI / QUADRI (Q)
-            const quadCount = take.filter(c => c.suit === 'Q').length + (card.suit === 'Q' ? 1 : 0);
-            score += quadCount * 200;
-
-            score += (take.length + 1) * 50;
-
-            if (score > highestScore) {
-              highestScore = score;
-              const takeStr = take.map(t => t.code).join('+');
-              bestOption = {
-                card: card.code,
-                desc: notes.length > 0 ? `${notes.join(' - ')} (prende ${takeStr})` : `Prende ${takeStr}`
-              };
-            }
-          }
-        } else {
-          // OPZIONI DI SCARTO: APPLICAZIONE DOTTRINA CLASSICA CHITARRELLA
-          let score = 0;
-          let notes = [];
-
-          // DIVIETO 1: MAI buttare il Settebello a terra
-          if (card.rank === '7' && card.suit === 'Q') score -= 90000;
-
-          // DIVIETO 2: Proteggi 7 e 6 di altri semi
-          score -= (card.primiera * 25);
-
-          const currentTableSum = table.reduce((acc, c) => acc + c.val, 0);
-          const resultingSum = currentTableSum + card.val;
-
-          const enemyCardsOfThisRank = getRemainingEnemyCards(card.rank, activeHand, partnerHand, table);
-
-          // SCARTO A TAVOLO VUOTO
-          if (table.length === 0) {
-            if (enemyCardsOfThisRank === 0) {
-              // I nemici hanno ZERO carte di questo rango: scarto al 100% sicuro
-              score += 8000;
-              notes.push(`SICUREZZA 100%: nemici senza ${card.rank} (Pariglia blindata)`);
-            } else if (card.rank === 'K') {
-              // Il Re vale 10: non permette somme combinate
-              score += 2000;
-              notes.push("Apertura classica con Re (valore 10)");
-            } else if (['J', 'Q'].includes(card.rank)) {
-              score += 1500;
-              notes.push(`Apertura con figura (${card.rank})`);
-            } else {
-              // Pericolo mortale: buttare carte basse a terra vuota regala scopa diretta al nemico
-              score -= (5000 + (8 - card.val) * 800);
-              notes.push(`RISCHIO SCOPA: apertura con pezzo basso (${card.rank})`);
-            }
-          } else {
-            // SCARTO CON CARTE GIÀ A TERRA: REGOLA DEL > 10
-            if (resultingSum > 10) {
-              // Somma > 10: NESSUNA carta singola può fare scopa in un colpo solo!
-              score += 3000;
-              notes.push(`SCARTO DI BOTTE: terra a ${resultingSum} (> 10, SCOPA NEMICA IMPOSSIBILE)`);
-            } else {
-              // Somma <= 10: l'avversario successivo può avere la carta per fare scopa immediata!
-              const targetRank = VALUE_TO_RANK[resultingSum];
-              const enemiesWithTakingCard = getRemainingEnemyCards(targetRank, activeHand, partnerHand, table);
-
-              if (enemiesWithTakingCard === 0) {
-                score += 1500;
-                notes.push(`Terra a ${resultingSum}, ma nemici senza ${targetRank}`);
-              } else {
-                // PENALITÀ ESTREMA: MAI LASCIARE TERRA PRENDIBILE AL NEMICO INTERMEDIO
-                score -= (15000 + enemiesWithTakingCard * 2500);
-                notes.push(`DIVIETO ASSOLUTO: lascia terra a ${resultingSum} (rischio scopa con ${targetRank})`);
-              }
-            }
-          }
-
-          if (score > highestScore) {
-            highestScore = score;
-            bestOption = {
-              card: card.code,
-              desc: notes.length > 0 ? notes.join(' - ') : "Scarto difensivo"
-            };
-          }
-        }
-      }
-
-      return bestOption || { card: activeHand[0].code, desc: "Scarto forzato" };
-    }
+Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
+{
+  "mano_nord": ["KC", "4Q", ...],
+  "mano_sud": ["7Q", "AP", ...],
+  "tavolo": ["3C", ...],
+  "tocca_a": "SUD" oppure "NORD",
+  "carta_consigliata": "7Q",
+  "dettaglio": "Prende 7C a terra (Residuo pulito)",
+  "motivo": "Spiegazione logica stringente in una riga",
+  "nemici_vivi": "Conteggio sintetico (es. 16/20 rimasti, 7Q nostro, nemici hanno ancora due 7)"
+}`;
 
     const video = document.getElementById('video');
     const canvasUpload = document.getElementById('canvas-upload');
@@ -413,28 +210,29 @@ Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
     const pillNord = document.getElementById('pill-nord');
     const pillSud = document.getElementById('pill-sud');
     const pillTable = document.getElementById('pill-table');
+    const pillTracker = document.getElementById('pill-tracker');
     const apiModal = document.getElementById('api-modal');
     const apiKeyInput = document.getElementById('api-key-input');
     const saveKeyBtn = document.getElementById('save-key-btn');
 
     let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
-    let currentActiveTurn = "SUD";
-    let lastNordCards = [];
-    let lastSudCards = [];
-    let lastTableCards = [];
+    let chatHistory = [];
+    let turnCount = 0;
 
-    btnReset.onclick = resetDeck;
+    function resetSession() {
+      chatHistory = [];
+      turnCount = 0;
+      decisionEl.innerText = "PRONTO";
+      decisionEl.style.color = "#10b981";
+      activePlayerEl.innerText = "STANDBY";
+      pillNord.innerText = "Nord: -";
+      pillSud.innerText = "Sud: -";
+      pillTable.innerText = "Terra: -";
+      pillTracker.innerText = "Carte Nemici: 20/20 note";
+      tacticBoxEl.innerText = "Mazzo resettato. Fai il primo scatto a carte appena distribuite.";
+    }
 
-    activePlayerEl.onclick = () => {
-      if (activePlayerEl.innerText === "STANDBY" || activePlayerEl.innerText === "CALCOLO...") return;
-      currentActiveTurn = currentActiveTurn === "SUD" ? "NORD" : "SUD";
-      activePlayerEl.innerText = `TURNO ${currentActiveTurn} (MANUALE)`;
-      const activeHand = currentActiveTurn === "NORD" ? lastNordCards : lastSudCards;
-      const partnerHand = currentActiveTurn === "NORD" ? lastSudCards : lastNordCards;
-      const best = scoponeMasterEngine(activeHand, partnerHand, lastTableCards, currentActiveTurn);
-      decisionEl.innerText = `${currentActiveTurn}: ${best.card}`;
-      tacticBoxEl.innerHTML = `<b>Mossa:</b> ${best.desc}`;
-    };
+    btnReset.onclick = resetSession;
 
     if (apiKey) {
       apiModal.style.display = 'none';
@@ -466,7 +264,7 @@ Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
     async function executeCapture() {
       if (btnAction.disabled) return;
       btnAction.disabled = true;
-      activePlayerEl.innerText = "CALCOLO...";
+      activePlayerEl.innerText = "ANALISI MASTER...";
       decisionEl.innerText = "...";
       decisionEl.style.color = "#facc15";
 
@@ -474,6 +272,7 @@ Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
         
+        // Crop ottimizzato per 35 cm dal monitor
         const cropW = srcWidth * 0.86;
         const cropH = srcHeight * 0.68;
         const cropX = srcWidth * 0.07;
@@ -490,29 +289,28 @@ Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
         
         const base64Image = canvasUpload.toDataURL('image/jpeg', 0.92).split(',')[1];
 
+        // Costruisce il messaggio per la sessione progressiva
+        const userTurnMessage = {
+          role: "user",
+          parts: [
+            { text: `Turno ${turnCount + 1}. Analizza la situazione, deduci le prese nemiche rispetto al turno precedente e fornisci la mossa ottimale.` },
+            { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+          ]
+        };
+
+        // Aggiunge allo storico
+        chatHistory.push(userTurnMessage);
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{
-              role: "user",
-              parts: [
-                { text: SYSTEM_PROMPT },
-                { inlineData: { mimeType: "image/jpeg", data: base64Image } }
-              ]
-            }],
+            systemInstruction: {
+              parts: [{ text: SYSTEM_PROMPT }]
+            },
+            contents: chatHistory,
             generationConfig: {
               responseMimeType: "application/json",
-              responseSchema: {
-                type: "OBJECT",
-                properties: {
-                  mano_nord: { type: "ARRAY", items: { type: "STRING" } },
-                  mano_sud: { type: "ARRAY", items: { type: "STRING" } },
-                  tavolo: { type: "ARRAY", items: { type: "STRING" } },
-                  tocca_a: { type: "STRING", enum: ["SUD", "NORD"] }
-                },
-                required: ["mano_nord", "mano_sud", "tavolo", "tocca_a"]
-              },
               thinkingConfig: { thinkingLevel: "low" }
             }
           })
@@ -522,43 +320,45 @@ Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
         if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) throw new Error("Risposta vuota");
+        if (!rawText) throw new Error("Risposta vuota dal modello");
+
+        // Salva la risposta del modello nella chat history per preservare la memoria al turno successivo
+        chatHistory.push({
+          role: "model",
+          parts: [{ text: rawText }]
+        });
 
         const parsed = JSON.parse(rawText);
-        lastNordCards = parsed.mano_nord || [];
-        lastSudCards = parsed.mano_sud || [];
-        lastTableCards = parsed.tavolo || [];
-        
-        if (turnCount > 0 && (!parsed.tocca_a || parsed.tocca_a === currentActiveTurn)) {
-          currentActiveTurn = (currentActiveTurn === "SUD") ? "NORD" : "SUD";
-        } else {
-          currentActiveTurn = parsed.tocca_a || "SUD";
-        }
+        const nordCards = parsed.mano_nord || [];
+        const sudCards = parsed.mano_sud || [];
+        const tableCards = parsed.tavolo || [];
+        const activeTurn = parsed.tocca_a || "SUD";
+        const bestCard = parsed.carta_consigliata || "-";
+        const detail = parsed.dettaglio || "";
+        const reason = parsed.motivo || "";
+        const enemyTracker = parsed.nemici_vivi || "";
+
         turnCount++;
 
-        runDeduction(lastTableCards);
+        pillNord.innerText = `Nord (${nordCards.length}): ${nordCards.join(' ')}`;
+        pillSud.innerText = `Sud (${sudCards.length}): ${sudCards.join(' ')}`;
+        pillTable.innerText = `Terra: ${tableCards.join(' ')}`;
+        if (enemyTracker) pillTracker.innerText = `Nemici: ${enemyTracker}`;
 
-        pillNord.innerText = `Nord (${lastNordCards.length}): ${lastNordCards.join(' ')}`;
-        pillSud.innerText = `Sud (${lastSudCards.length}): ${lastSudCards.join(' ')}`;
-        pillTable.innerText = `Terra: ${lastTableCards.join(' ')}`;
-
-        const activeHand = currentActiveTurn === "NORD" ? lastNordCards : lastSudCards;
-        const partnerHand = currentActiveTurn === "NORD" ? lastSudCards : lastNordCards;
-
-        const best = scoponeMasterEngine(activeHand, partnerHand, lastTableCards, currentActiveTurn);
-
-        lastHeroCardPlayed = best.card;
-
-        decisionEl.innerText = `${currentActiveTurn}: ${best.card}`;
+        decisionEl.innerText = `${activeTurn}: ${bestCard}`;
         decisionEl.style.color = "#10b981";
-        activePlayerEl.innerText = `TURNO ${currentActiveTurn}`;
-        tacticBoxEl.innerHTML = `<b>Mossa Maestro:</b> ${best.desc}`;
+        activePlayerEl.innerText = `TURNO ${activeTurn}`;
+        tacticBoxEl.innerHTML = `<b>${detail}</b><br><span style="color:#94a3b8;">${reason}</span>`;
 
       } catch (err) {
         decisionEl.innerText = "ERRORE";
         decisionEl.style.color = "#ef4444";
         activePlayerEl.innerText = "FALLITO";
         tacticBoxEl.innerText = err.message;
+        // Rimuove l'ultimo messaggio non riuscito per non corrompere la cronologia
+        if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === "user") {
+          chatHistory.pop();
+        }
       } finally {
         btnAction.disabled = false;
       }
@@ -566,11 +366,6 @@ Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
 
     btnAction.onclick = executeCapture;
 
+    // Telecomando Bluetooth
     window.addEventListener('keydown', (e) => {
-      if (apiModal.style.display !== 'none') return;
-      e.preventDefault();
-      executeCapture();
-    });
-  </script>
-</body>
-</html>
+      if (
