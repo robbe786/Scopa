@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Scopa 4 in 2 - Auto-Deduction Engine</title>
+  <title>Scopa 4 in 2 - Pro Master Vision</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: #0b0f19; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -14,10 +14,10 @@
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
-      width: 80%; 
-      height: 76%; 
-      left: 10%; 
-      top: 12%; 
+      width: 82%; 
+      height: 84%; 
+      left: 9%; 
+      top: 8%; 
       pointer-events: none; 
       border-radius: 8px; 
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); 
@@ -136,20 +136,20 @@
   <div id="dashboard">
     <div id="decision-box">
       <div id="decision">PRONTO</div>
-      <div id="active-player" title="Tocca per correggere manualmente il turno">STANDBY</div>
+      <div id="active-player" title="Tocca per forzare il turno manualmente">STANDBY</div>
     </div>
 
-    <div id="tactic-box">Premi NUOVA SMAZZATA all'inizio, poi scatta col telecomando a ogni tuo turno.</div>
+    <div id="tactic-box">NUOVA SMAZZATA a inizio round, poi scatta con il telecomando.</div>
 
     <div class="state-grid">
       <div class="pill" id="pill-nord">Nord: -</div>
       <div class="pill" id="pill-sud">Sud: -</div>
       <div class="pill pill-full" id="pill-table">Terra: -</div>
-      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Conteggio Carte: Inizializzato</div>
+      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Carte Uscite Dedotte: 0/40</div>
     </div>
 
     <div class="action-row">
-      <button id="btn-reset" title="Azzera il mazzo per una nuova smazzata">NUOVA SMAZZATA</button>
+      <button id="btn-reset">NUOVA SMAZZATA</button>
       <button id="btn-action">SCATTA / [BT REMOTE]</button>
     </div>
   </div>
@@ -157,38 +157,45 @@
   <canvas id="canvas-upload" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un lettore OCR per Scopa "4 in 2" su Sisal con mazzo da 40 carte francesi.
-Valori ammessi: A (1), 2, 3, 4, 5, 6, 7, J (8), Q (9), K (10).
-Semi: C (Cuori), Q (Quadri), F (Fiori), P (Picche).
+    const SYSTEM_PROMPT = `Sei un lettore OCR specializzato per Scopa 4 in 2 su Sisal con mazzo da 40 carte francesi.
 
-IDENTIFICAZIONE TURNO ATTIVO ("tocca_a"):
-- Individua la finestra bianca con testo "Seleziona una delle tue carte" e freccia gialla.
-- Se si trova vicino alle carte in BASSO -> "SUD".
-- Se si trova vicino alle carte in ALTO -> "NORD".
+COME DETERMINARE "tocca_a":
+ATTENZIONE: il banner arancione potrebbe lampeggiare ed essere spento. Usa questi marcatori prioritari:
+1. Cerca il simbolo bianco ad arco / LUCCHETTO sopra la carta:
+   - Se il lucchetto è sopra le carte di NORD -> "tocca_a": "NORD".
+   - Se il lucchetto è sopra le carte di SUD -> "tocca_a": "SUD".
+2. Se visibile, controlla quale badge "(ospite 154)" o popup "Seleziona una delle tue carte" è evidenziato.
 
-Compito:
-1. "mano_nord": carte visibili in alto a Nord.
-2. "mano_sud": carte visibili in basso a Sud.
-3. "tavolo": carte scoperte al centro del tavolo.
-4. "tocca_a": "SUD" o "NORD".
-Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
+DISTINZIONE RIGOROSA DEI SEMI FRANCESI:
+- C = Cuori (rosso, due lobi arrotondati in alto)
+- Q = Quadri (rosso, rombo con vertici appuntiti)
+- F = Fiori (nero, trifoglio con gambo)
+- P = Picche (nero, foglia singola con cuspide verso l'alto)
+
+TAVOLO:
+- Riporta solo le vere carte da gioco rettangolari scoperte.
+- IGNORA categoricamente loghi, decorazioni e la scritta centrale "Sisal.it".
+
+Output JSON con: mano_nord, mano_sud, tavolo, tocca_a ("SUD" o "NORD").`;
 
     const CARD_VALUES = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, 'J': 8, 'Q': 9, 'K': 10 };
     const VALUE_TO_RANK = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: 'J', 9: 'Q', 10: 'K' };
     const PRIMIERA_POINTS = { '7': 21, '6': 18, 'A': 16, '5': 15, '4': 14, '3': 13, '2': 12, 'J': 10, 'Q': 10, 'K': 10 };
-    const RANKS = ['A', '2', '3', '4', '5', '6', '7', 'J', 'Q', 'K'];
 
-    // REGISTRO PERSISTENTE DELLE 40 CARTE CON DEDUZIONE
     let deadRanks = { 'A': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, 'J': 0, 'Q': 0, 'K': 0 };
     let previousTableCards = [];
     let lastHeroCardPlayed = null;
+    let turnCount = 0;
 
     function resetDeck() {
       deadRanks = { 'A': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, 'J': 0, 'Q': 0, 'K': 0 };
       previousTableCards = [];
       lastHeroCardPlayed = null;
-      document.getElementById('pill-tracker').innerText = `Conteggio Carte: Azzerato per nuova smazzata`;
+      turnCount = 0;
+      currentActiveTurn = "SUD";
+      document.getElementById('pill-tracker').innerText = `Carte Uscite Dedotte: 0/40`;
       document.getElementById('tactic-box').innerText = "Mazzo resettato. Pronto per il primo scatto.";
+      document.getElementById('active-player').innerText = "STANDBY";
     }
 
     function parseCard(code) {
@@ -201,9 +208,7 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
       return { code: `${rank}${suit}`, rank, suit, val, primiera: PRIMIERA_POINTS[rank] || 0 };
     }
 
-    // MODULO DEDUZIONE ALGEBRICA AUTOMATICA
     function runDeduction(currentTable) {
-      // 1. Registra la carta giocata da Hero al turno precedente
       if (lastHeroCardPlayed) {
         const parsedHero = parseCard(lastHeroCardPlayed);
         if (parsedHero && deadRanks[parsedHero.rank] < 4) {
@@ -212,10 +217,8 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
         lastHeroCardPlayed = null;
       }
 
-      // 2. Analizza cosa è sparito dal tavolo (prese effettuate dall'avversario o da noi)
       if (previousTableCards.length > 0) {
         const missingCards = previousTableCards.filter(c => !currentTable.includes(c));
-        
         if (missingCards.length > 0) {
           let sumTaken = 0;
           missingCards.forEach(cStr => {
@@ -226,7 +229,6 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
             }
           });
 
-          // Se le carte sparite sono state prese dall'avversario, deduciamo la carta da mano che ha usato!
           if (sumTaken <= 10 && sumTaken > 0) {
             const deducedRank = VALUE_TO_RANK[sumTaken];
             if (deducedRank && deadRanks[deducedRank] < 4) {
@@ -237,7 +239,6 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
       }
 
       previousTableCards = [...currentTable];
-
       let totalDead = Object.values(deadRanks).reduce((a, b) => a + b, 0);
       document.getElementById('pill-tracker').innerText = `Carte Uscite Dedotte: ~${totalDead}/40`;
     }
@@ -263,7 +264,6 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
       return results;
     }
 
-    // Quante carte di quel valore restano ancora vive in mano a Est e Ovest
     function getRemainingEnemyCards(rank, activeHand, partnerHand, table) {
       let alreadyVisible = 0;
       activeHand.forEach(c => { if (c.rank === rank) alreadyVisible++; });
@@ -275,7 +275,6 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
       return Math.max(0, aliveInEnemies);
     }
 
-    // MOTORE CON VALUTAZIONE STRATEGICA
     function proMasterEngine(activeHandRaw, partnerHandRaw, tableRaw, activePlayerName) {
       const activeHand = activeHandRaw.map(parseCard).filter(Boolean);
       const partnerHand = partnerHandRaw.map(parseCard).filter(Boolean);
@@ -323,7 +322,6 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
             }
           }
         } else {
-          // SCARTO: Valutazione con deduzione avversaria
           let score = 0;
           let notes = [];
 
@@ -336,32 +334,30 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
 
           const enemyCardsOfThisRank = getRemainingEnemyCards(card.rank, activeHand, partnerHand, table);
 
-          // Scarto a terra vuota di valore esaurito: rischio scopa ZERO
           if (table.length === 0 && enemyCardsOfThisRank === 0) {
             score += 900;
-            notes.push(`SICUREZZA 100%: nemici senza ${card.rank} (0 rimasti)`);
+            notes.push(`SICUREZZA 100%: nemici senza ${card.rank}`);
           }
 
-          // ASSIST AL COMPAGNO
           const partnerCanTakeSum = partnerHand.some(pc => pc.val === resultingSum);
           const partnerHasMatching = partnerHand.some(pc => pc.val === card.val);
 
           if (partnerCanTakeSum && resultingSum <= 10) {
             score += 350;
-            notes.push(`Assist a ${activePlayerName === 'SUD' ? 'Nord' : 'Sud'} (prepara a ${resultingSum})`);
+            notes.push(`Assist a ${activePlayerName === 'SUD' ? 'Nord' : 'Sud'} (apparecchia a ${resultingSum})`);
           } else if (table.length === 0 && partnerHasMatching) {
             score += 260;
-            notes.push(`Apertura coordinata: compagno copre il ${card.rank}`);
+            notes.push(`Apertura coordinata: compagno copre ${card.rank}`);
           } else if (resultingSum <= 10) {
             const targetRank = VALUE_TO_RANK[resultingSum];
             const enemiesWithTakingCard = getRemainingEnemyCards(targetRank, activeHand, partnerHand, table);
 
             if (enemiesWithTakingCard === 0) {
               score += 250;
-              notes.push(`Terra a ${resultingSum}, ma NESSUN nemico ha il ${targetRank} (Scopa impossibile)`);
+              notes.push(`Terra a ${resultingSum}, ma NESSUN nemico ha il ${targetRank}`);
             } else {
               score -= (1800 + enemiesWithTakingCard * 250);
-              notes.push(`PERICOLO: lascia terra a ${resultingSum} (nemici hanno ${enemiesWithTakingCard} carte da ${targetRank})`);
+              notes.push(`PERICOLO: lascia terra a ${resultingSum}`);
             }
           } else {
             score += 90;
@@ -452,12 +448,12 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
         
-        const cropW = srcWidth * 0.80;
-        const cropH = srcHeight * 0.76;
-        const cropX = srcWidth * 0.10;
-        const cropY = srcHeight * 0.12;
+        const cropW = srcWidth * 0.82;
+        const cropH = srcHeight * 0.84;
+        const cropX = srcWidth * 0.09;
+        const cropY = srcHeight * 0.07;
 
-        const targetWidth = 1000;
+        const targetWidth = 1280;
         canvasUpload.width = targetWidth;
         canvasUpload.height = (cropH / cropW) * targetWidth;
 
@@ -466,7 +462,7 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvasUpload.width, canvasUpload.height);
         
-        const base64Image = canvasUpload.toDataURL('image/jpeg', 0.76).split(',')[1];
+        const base64Image = canvasUpload.toDataURL('image/jpeg', 0.88).split(',')[1];
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
@@ -506,9 +502,16 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
         lastNordCards = parsed.mano_nord || [];
         lastSudCards = parsed.mano_sud || [];
         lastTableCards = parsed.tavolo || [];
-        currentActiveTurn = parsed.tocca_a || "SUD";
+        
+        // Risoluzione Turno: se l'AI è in dubbio o scatta durante il lampeggio spento,
+        // garantisce l'alternanza naturale Sud -> Nord -> Sud
+        if (turnCount > 0 && (!parsed.tocca_a || parsed.tocca_a === currentActiveTurn)) {
+          currentActiveTurn = (currentActiveTurn === "SUD") ? "NORD" : "SUD";
+        } else {
+          currentActiveTurn = parsed.tocca_a || "SUD";
+        }
+        turnCount++;
 
-        // Esegue la deduzione algebrica delle carte scomparse/giocate
         runDeduction(lastTableCards);
 
         pillNord.innerText = `Nord: ${lastNordCards.join(' ')}`;
@@ -520,7 +523,6 @@ Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
 
         const best = proMasterEngine(activeHand, partnerHand, lastTableCards, currentActiveTurn);
 
-        // Memorizza la giocata effettuata per aggiornare la deduzione al prossimo scatto
         lastHeroCardPlayed = best.card;
 
         decisionEl.innerText = `${currentActiveTurn}: ${best.card}`;
