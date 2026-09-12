@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Scopone 4 in 2 - Precision Vision</title>
+  <title>Scopone 4 in 2 - Motore Chitarrella Anti-Scopa</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: #0b0f19; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -11,7 +11,6 @@
     #camera-container { flex: 1 1 auto; min-height: 0; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Riquadro calibrato a 35 cm: altezza ridotta e centrato sul tavolo di gioco */
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
@@ -140,13 +139,13 @@
       <div id="active-player" title="Tocca per correggere manualmente il turno">STANDBY</div>
     </div>
 
-    <div id="tactic-box">NUOVA SMAZZATA al primo turno, poi scatta con il telecomando.</div>
+    <div id="tactic-box">NUOVA SMAZZATA al turno 1, poi scatta col telecomando.</div>
 
     <div class="state-grid">
       <div class="pill" id="pill-nord">Nord: -</div>
       <div class="pill" id="pill-sud">Sud: -</div>
       <div class="pill pill-full" id="pill-table">Terra: -</div>
-      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Carte Uscite Dedotte: 0/40</div>
+      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Conteggio Scopone: Inizializzato</div>
     </div>
 
     <div class="action-row">
@@ -160,31 +159,32 @@
   <script>
     const SYSTEM_PROMPT = `Sei un lettore OCR scientifico per carte da gioco francesi (mazzo da 40 carte, senza 8, 9, 10).
 
-DISCRIMINAZIONE GEOMETRICA CRITICA DEI SEMI:
-Controlla scrupolosamente l'icona del seme posta sotto il valore nell'angolo in alto a sinistra di ciascuna carta:
+VALORI E RANGHI:
+- A = 1
+- 2, 3, 4, 5, 6, 7 = valore nominale
+- J (Fante) = 8
+- Q (Regina/Donna) = 9
+- K (Re) = 10
 
-ROSSI:
-- Q (Quadri / Denari): Rombo geometrico con 4 angoli vivi e lati dritti. NON ha curve né lobi rotondi.
-- C (Cuori): Ha 2 curve arrotondate in cima e una punta verso il basso. Ha una rientranza al centro in alto.
-
-NERI:
-- P (Picche): Foglia con UNICA PUNTA acuminata verso l'alto e base sagomata con piccolo gambo.
-- F (Fiori): Trifoglio formato da TRE CERCHIETTI separati (uno in alto, due ai lati) con gambo. NON ha punta acuta.
+SEMI:
+- Q = Quadri (rosso, rombo)
+- C = Cuori (rosso, due lobi curvi in cima)
+- P = Picche (nero, foglia con unica punta acuta in alto)
+- F = Fiori (nero, trifoglio con 3 cerchietti)
 
 TURNO ATTIVO ("tocca_a"):
-- Controlla i rettangoli con scritto "(ospite ...)".
-- Il rettangolo NON-VERDE (arancione o giallo, anche se lampeggia) indica chi deve giocare:
-  * Se in alto a Nord non è verde -> "NORD".
-  * Se in basso a Sud non è verde -> "SUD".
+- Controlla i box "(ospite ...)":
+  * Se in alto a Nord non è verde (arancione/giallo) -> "NORD".
+  * Se in basso a Sud non è verde (arancione/giallo) -> "SUD".
 
 COMPITO:
-1. "mano_nord": carte visibili in alto da sinistra a destra (fino a 10).
-2. "mano_sud": carte visibili in basso da sinistra a destra (fino a 10).
-3. "tavolo": carte scoperte a terra al centro (IGNORA la scritta Sisal.it).
+1. "mano_nord": carte visibili in alto da sinistra a destra.
+2. "mano_sud": carte visibili in basso da sinistra a destra.
+3. "tavolo": carte scoperte a terra al centro (ignora Sisal.it).
 4. "tocca_a": "SUD" o "NORD".
+Codici: Valore + Seme (es. ["KC", "4Q", "7Q", "JH", "AP"]).`;
 
-Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
-
+    // SCALA UFFICIALE RIGIDA
     const CARD_VALUES = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, 'J': 8, 'Q': 9, 'K': 10 };
     const VALUE_TO_RANK = { 1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: 'J', 9: 'Q', 10: 'K' };
     const PRIMIERA_POINTS = { '7': 21, '6': 18, 'A': 16, '5': 15, '4': 14, '3': 13, '2': 12, 'J': 10, 'Q': 10, 'K': 10 };
@@ -200,8 +200,8 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
       lastHeroCardPlayed = null;
       turnCount = 0;
       currentActiveTurn = "SUD";
-      document.getElementById('pill-tracker').innerText = `Carte Uscite Dedotte: 0/40`;
-      document.getElementById('tactic-box').innerText = "Mazzo azzerato. Pronto per il primo scatto.";
+      document.getElementById('pill-tracker').innerText = `Carte Uscite: 0/40`;
+      document.getElementById('tactic-box').innerText = "Mazzo resettato. Pronto per il primo scatto.";
       document.getElementById('active-player').innerText = "STANDBY";
     }
 
@@ -251,6 +251,7 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
     }
 
     function getLegalTakes(card, table) {
+      // Regola ufficiale di presa: se c'è carta singola uguale, presa singola OBBLIGATORIA
       const singleMatch = table.filter(t => t.val === card.val);
       if (singleMatch.length > 0) return singleMatch.map(t => [t]);
 
@@ -281,6 +282,7 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
       return Math.max(0, 4 - dead - alreadyVisible);
     }
 
+    // MOTORE CHITARRELLA CON PROTEZIONE TOTALE ANTI-SCOPA
     function scoponeMasterEngine(activeHandRaw, partnerHandRaw, tableRaw, activePlayerName) {
       const activeHand = activeHandRaw.map(parseCard).filter(Boolean);
       const partnerHand = partnerHandRaw.map(parseCard).filter(Boolean);
@@ -289,34 +291,39 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
       if (activeHand.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata in mano" };
 
       let bestOption = null;
-      let highestScore = -999999;
+      let highestScore = -9999999;
 
       for (const card of activeHand) {
         const takes = getLegalTakes(card, table);
 
         if (takes.length > 0) {
+          // OPZIONI CON PRESA: Sempre preferite rispetto allo scarto
           for (const take of takes) {
-            let score = 250;
+            let score = 5000; // Priorità assoluta a prendere carte dal tavolo
             let notes = [];
 
+            // SCOPA NOSTRA
             if (take.length === table.length) {
-              score += 5000;
-              notes.push("⭐ SCOPA!");
+              score += 20000;
+              notes.push("⭐ SCOPA NOSTRA!");
             }
 
+            // SETTEBELLO (7Q)
             const is7Q = (c) => c.rank === '7' && c.suit === 'Q';
             if (is7Q(card) || take.some(is7Q)) {
-              score += 2000;
+              score += 10000;
               notes.push("Prende Settebello (7Q)");
             }
 
+            // PRIMIERA (7 > 6 > A)
             const primieraGained = take.reduce((acc, c) => acc + c.primiera, 0) + card.primiera;
-            score += primieraGained * 7;
+            score += primieraGained * 50;
 
+            // DENARI / QUADRI (Q)
             const quadCount = take.filter(c => c.suit === 'Q').length + (card.suit === 'Q' ? 1 : 0);
-            score += quadCount * 50;
+            score += quadCount * 200;
 
-            score += (take.length + 1) * 15;
+            score += (take.length + 1) * 50;
 
             if (score > highestScore) {
               highestScore = score;
@@ -328,46 +335,59 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
             }
           }
         } else {
+          // OPZIONI DI SCARTO: APPLICAZIONE DOTTRINA CLASSICA CHITARRELLA
           let score = 0;
           let notes = [];
 
-          if (card.rank === '7' && card.suit === 'Q') score -= 9999;
-          score -= (card.primiera * 12);
-          if (['K', 'Q', 'J'].includes(card.rank)) score += 60;
+          // DIVIETO 1: MAI buttare il Settebello a terra
+          if (card.rank === '7' && card.suit === 'Q') score -= 90000;
+
+          // DIVIETO 2: Proteggi 7 e 6 di altri semi
+          score -= (card.primiera * 25);
 
           const currentTableSum = table.reduce((acc, c) => acc + c.val, 0);
           const resultingSum = currentTableSum + card.val;
 
           const enemyCardsOfThisRank = getRemainingEnemyCards(card.rank, activeHand, partnerHand, table);
 
-          if (table.length === 0 && enemyCardsOfThisRank === 0) {
-            score += 1000;
-            notes.push(`SICUREZZA 100%: nemici senza ${card.rank}`);
-          }
-
-          const partnerCanTakeSum = partnerHand.some(pc => pc.val === resultingSum);
-          const partnerHasMatching = partnerHand.some(pc => pc.val === card.val);
-
-          if (partnerCanTakeSum && resultingSum <= 10) {
-            score += 400;
-            notes.push(`Assist a ${activePlayerName === 'SUD' ? 'Nord' : 'Sud'} (prepara a ${resultingSum})`);
-          } else if (table.length === 0 && partnerHasMatching) {
-            score += 300;
-            notes.push(`Apertura coordinata: compagno copre ${card.rank}`);
-          } else if (resultingSum <= 10) {
-            const targetRank = VALUE_TO_RANK[resultingSum];
-            const enemiesWithTakingCard = getRemainingEnemyCards(targetRank, activeHand, partnerHand, table);
-
-            if (enemiesWithTakingCard === 0) {
-              score += 260;
-              notes.push(`Terra a ${resultingSum}, ma NESSUN nemico ha il ${targetRank}`);
+          // SCARTO A TAVOLO VUOTO
+          if (table.length === 0) {
+            if (enemyCardsOfThisRank === 0) {
+              // I nemici hanno ZERO carte di questo rango: scarto al 100% sicuro
+              score += 8000;
+              notes.push(`SICUREZZA 100%: nemici senza ${card.rank} (Pariglia blindata)`);
+            } else if (card.rank === 'K') {
+              // Il Re vale 10: non permette somme combinate
+              score += 2000;
+              notes.push("Apertura classica con Re (valore 10)");
+            } else if (['J', 'Q'].includes(card.rank)) {
+              score += 1500;
+              notes.push(`Apertura con figura (${card.rank})`);
             } else {
-              score -= (2000 + enemiesWithTakingCard * 300);
-              notes.push(`PERICOLO: terra a ${resultingSum} (nemici hanno ${enemiesWithTakingCard} pezzi da ${targetRank})`);
+              // Pericolo mortale: buttare carte basse a terra vuota regala scopa diretta al nemico
+              score -= (5000 + (8 - card.val) * 800);
+              notes.push(`RISCHIO SCOPA: apertura con pezzo basso (${card.rank})`);
             }
           } else {
-            score += 100;
-            notes.push(`Scarto sicuro (terra a ${resultingSum} > 10)`);
+            // SCARTO CON CARTE GIÀ A TERRA: REGOLA DEL > 10
+            if (resultingSum > 10) {
+              // Somma > 10: NESSUNA carta singola può fare scopa in un colpo solo!
+              score += 3000;
+              notes.push(`SCARTO DI BOTTE: terra a ${resultingSum} (> 10, SCOPA NEMICA IMPOSSIBILE)`);
+            } else {
+              // Somma <= 10: l'avversario successivo può avere la carta per fare scopa immediata!
+              const targetRank = VALUE_TO_RANK[resultingSum];
+              const enemiesWithTakingCard = getRemainingEnemyCards(targetRank, activeHand, partnerHand, table);
+
+              if (enemiesWithTakingCard === 0) {
+                score += 1500;
+                notes.push(`Terra a ${resultingSum}, ma nemici senza ${targetRank}`);
+              } else {
+                // PENALITÀ ESTREMA: MAI LASCIARE TERRA PRENDIBILE AL NEMICO INTERMEDIO
+                score -= (15000 + enemiesWithTakingCard * 2500);
+                notes.push(`DIVIETO ASSOLUTO: lascia terra a ${resultingSum} (rischio scopa con ${targetRank})`);
+              }
+            }
           }
 
           if (score > highestScore) {
@@ -380,7 +400,7 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
         }
       }
 
-      return bestOption || { card: activeHand[0].code, desc: "Scarto standard" };
+      return bestOption || { card: activeHand[0].code, desc: "Scarto forzato" };
     }
 
     const video = document.getElementById('video');
@@ -454,7 +474,6 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
         
-        // Ritaglio calibrato sull'overlay a 35 cm: 86% largh, 68% alt, centrato
         const cropW = srcWidth * 0.86;
         const cropH = srcHeight * 0.68;
         const cropX = srcWidth * 0.07;
@@ -533,7 +552,7 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
         decisionEl.innerText = `${currentActiveTurn}: ${best.card}`;
         decisionEl.style.color = "#10b981";
         activePlayerEl.innerText = `TURNO ${currentActiveTurn}`;
-        tacticBoxEl.innerHTML = `<b>Mossa:</b> ${best.desc}`;
+        tacticBoxEl.innerHTML = `<b>Mossa Maestro:</b> ${best.desc}`;
 
       } catch (err) {
         decisionEl.innerText = "ERRORE";
