@@ -11,13 +11,14 @@
     #camera-container { flex: 1 1 auto; min-height: 0; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
+    /* Riquadro calibrato a 35 cm: altezza ridotta e centrato sul tavolo di gioco */
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
-      width: 84%; 
-      height: 86%; 
-      left: 8%; 
-      top: 7%; 
+      width: 86%; 
+      height: 68%; 
+      left: 7%; 
+      top: 16%; 
       pointer-events: none; 
       border-radius: 8px; 
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); 
@@ -160,25 +161,26 @@
     const SYSTEM_PROMPT = `Sei un lettore OCR scientifico per carte da gioco francesi (mazzo da 40 carte, senza 8, 9, 10).
 
 DISCRIMINAZIONE GEOMETRICA CRITICA DEI SEMI:
-Controlla scrupolosamente i dettagli geometrici dell'icona del seme posta sotto il numero nell'angolo in alto a sinistra della carta:
+Controlla scrupolosamente l'icona del seme posta sotto il valore nell'angolo in alto a sinistra di ciascuna carta:
 
 ROSSI:
-- Q (Quadri / Denari): Rombo geometrico con 4 angoli vivi e lati rettilinei. NON ha curve rotonde.
-- C (Cuori): Presenta 2 curve arrotondate in cima e una punta verso il basso. Ha una rientranza netta al centro in alto.
+- Q (Quadri / Denari): Rombo geometrico con 4 angoli vivi e lati dritti. NON ha curve né lobi rotondi.
+- C (Cuori): Ha 2 curve arrotondate in cima e una punta verso il basso. Ha una rientranza al centro in alto.
 
 NERI:
-- P (Picche): Foglia acuminata con UNICA PUNTA verso l'alto e base sagomata con piccolo gambo. La cima è appuntita.
-- F (Fiori): Trifoglio formato da TRE CERCHIETTI separati (uno in alto, due ai lati) con gambo centrale. NON ha punta verso l'alto.
+- P (Picche): Foglia con UNICA PUNTA acuminata verso l'alto e base sagomata con piccolo gambo.
+- F (Fiori): Trifoglio formato da TRE CERCHIETTI separati (uno in alto, due ai lati) con gambo. NON ha punta acuta.
 
 TURNO ATTIVO ("tocca_a"):
-- Guarda i rettangoli con scritto "(ospite ...)".
-- Il lato NON-VERDE (arancione o giallo lampeggiante) è quello a cui tocca giocare.
-- Se in alto non è verde -> "NORD". Se in basso non è verde -> "SUD".
+- Controlla i rettangoli con scritto "(ospite ...)".
+- Il rettangolo NON-VERDE (arancione o giallo, anche se lampeggia) indica chi deve giocare:
+  * Se in alto a Nord non è verde -> "NORD".
+  * Se in basso a Sud non è verde -> "SUD".
 
 COMPITO:
 1. "mano_nord": carte visibili in alto da sinistra a destra (fino a 10).
 2. "mano_sud": carte visibili in basso da sinistra a destra (fino a 10).
-3. "tavolo": carte effettive a terra (IGNORA la scritta "Sisal.it").
+3. "tavolo": carte scoperte a terra al centro (IGNORA la scritta Sisal.it).
 4. "tocca_a": "SUD" o "NORD".
 
 Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
@@ -452,12 +454,12 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
         
-        const cropW = srcWidth * 0.84;
-        const cropH = srcHeight * 0.86;
-        const cropX = srcWidth * 0.08;
-        const cropY = srcHeight * 0.07;
+        // Ritaglio calibrato sull'overlay a 35 cm: 86% largh, 68% alt, centrato
+        const cropW = srcWidth * 0.86;
+        const cropH = srcHeight * 0.68;
+        const cropX = srcWidth * 0.07;
+        const cropY = srcHeight * 0.16;
 
-        // RISOLUZIONE OTTIMALE PER DETTAGLIO SEMI
         const targetWidth = 1400;
         canvasUpload.width = targetWidth;
         canvasUpload.height = (cropH / cropW) * targetWidth;
@@ -467,7 +469,6 @@ Formato: Valore (A, 2, 3, 4, 5, 6, 7, J, Q, K) + Seme (C, Q, F, P).`;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvasUpload.width, canvasUpload.height);
         
-        // COMPRESSIONE MINIMA PER NON DEGRAPHARE I BORDI DEI SEMI
         const base64Image = canvasUpload.toDataURL('image/jpeg', 0.92).split(',')[1];
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
