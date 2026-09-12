@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Scopa Sisal Pro - Francese (C, Q, F, P)</title>
+  <title>Scopa 4 in 2 - Pro Master Edition</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: #0b0f19; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -14,76 +14,79 @@
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
-      width: 82%; 
-      height: 86%; 
-      left: 9%; 
-      top: 7%; 
+      width: 78%; 
+      height: 94%; 
+      left: 11%; 
+      top: 3%; 
       pointer-events: none; 
       border-radius: 8px; 
       box-shadow: 0 0 0 9999px rgba(0,0,0,0.65); 
     }
 
-    #dashboard { flex: 0 0 auto; background: #111827; padding: 12px; display: flex; flex-direction: column; gap: 8px; border-top: 2px solid #1f2937; }
+    #dashboard { flex: 0 0 auto; background: #111827; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; border-top: 2px solid #1f2937; max-height: 52vh; overflow-y: auto; }
     
     #decision-box {
       background: #030712;
       border: 2px solid #10b981;
       border-radius: 10px;
-      padding: 10px 14px;
+      padding: 8px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
     #decision { 
-      font-size: 2.3rem; 
+      font-size: 2.2rem; 
       font-weight: 900; 
       color: #10b981; 
-      letter-spacing: 1px; 
+      letter-spacing: 0.5px; 
       line-height: 1;
     }
-    #status-badge { 
-      font-size: 0.8rem; 
+    #active-player { 
+      font-size: 0.85rem; 
       font-weight: bold; 
-      color: #9ca3af; 
+      color: #38bdf8; 
       text-transform: uppercase;
     }
 
     #tactic-box {
       background: #1f2937;
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-radius: 6px;
       border-left: 4px solid #38bdf8;
-      font-size: 0.95rem;
-      line-height: 1.4;
+      font-size: 0.9rem;
+      line-height: 1.35;
       color: #f3f4f6;
-      min-height: 2.8em;
+      min-height: 2.6em;
     }
 
-    .state-pills {
-      display: flex;
-      gap: 6px;
-      font-size: 0.82rem;
-      color: #cbd5e1;
+    .state-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      font-size: 0.78rem;
     }
     .pill {
       background: #374151;
-      padding: 3px 8px;
+      padding: 4px 6px;
       border-radius: 4px;
       font-family: monospace;
-      font-weight: bold;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+    .pill-full { grid-column: span 2; }
 
     #btn-action { 
       width: 100%; 
-      padding: 16px; 
-      font-size: 1.3rem; 
+      padding: 15px; 
+      font-size: 1.25rem; 
       font-weight: 900; 
       color: white; 
       background: #0284c7; 
       border: none; 
       border-radius: 10px; 
       cursor: pointer; 
-      transition: background 0.15s ease;
+      margin-top: 2px;
     }
     #btn-action:active { background: #0369a1; }
     #btn-action:disabled { background: #4b5563; cursor: not-allowed; }
@@ -112,35 +115,37 @@
   <div id="dashboard">
     <div id="decision-box">
       <div id="decision">PRONTO</div>
-      <div id="status-badge">STANDBY</div>
+      <div id="active-player">STANDBY</div>
     </div>
 
-    <div id="tactic-box">Punta il tavolo Sisal e premi SCATTA appena tocca a te.</div>
+    <div id="tactic-box">Inquadra il tavolo Sisal. Premi SCATTA quando tocca a te (Sud o Nord).</div>
 
-    <div class="state-pills">
-      <div class="pill" id="pill-hand">Mano: -</div>
-      <div class="pill" id="pill-table">Tavolo: -</div>
+    <div class="state-grid">
+      <div class="pill" id="pill-nord">Nord: -</div>
+      <div class="pill" id="pill-sud">Sud: -</div>
+      <div class="pill pill-full" id="pill-table">Terra: -</div>
     </div>
 
-    <button id="btn-action">SCATTA (TOCCA A ME)</button>
+    <button id="btn-action">SCATTA (ANALIZZA TAVOLO)</button>
   </div>
 
   <canvas id="canvas-upload" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei un lettore OCR specializzato per Scopa 1vs1 su Sisal con mazzo francese da 40 carte (senza 8, 9, 10).
+    const SYSTEM_PROMPT = `Sei un lettore OCR specializzato per Scopa "4 in 2" su Sisal con mazzo francese da 40 carte (senza 8, 9, 10).
 Valori ammessi: A (1), 2, 3, 4, 5, 6, 7, J (8), Q (9), K (10).
-
-SEMI ITALIANI:
-- C = Cuori (Rosso, due curve in alto)
-- Q = Quadri / Denari (Rosso, rombo)
-- F = Fiori (Nero, trifoglio a 3 pallini con gambo)
-- P = Picche (Nero, foglia/cuore rovesciato con punta acuta)
+Semi italiani:
+- C = Cuori (rosso)
+- Q = Quadri / Denari (rosso a rombo)
+- F = Fiori (nero a trifoglio)
+- P = Picche (nero a lancia)
 
 Compito:
-1. Rileva le carte in mano a Hero in basso (da 1 a 3 carte) -> "mie_carte".
-2. Rileva tutte le carte a terra scoperte al centro del tavolo -> "tavolo".
-Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".`;
+1. "mano_nord": carte visibili in alto a Nord.
+2. "mano_sud": carte visibili in basso a Sud.
+3. "tavolo": carte scoperte al centro del tavolo.
+4. "tocca_a": determina quale mano deve giocare ORA tra "SUD" e "NORD" (guarda dove compare il popup "Seleziona una delle tue carte" o la freccia/timer attivo).
+Codici carte: Valore + Seme (es. ["7Q", "AC", "5F", "KP"]).`;
 
     const CARD_VALUES = { 'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, 'J': 8, 'Q': 9, 'K': 10 };
     const PRIMIERA_POINTS = { '7': 21, '6': 18, 'A': 16, '5': 15, '4': 14, '3': 13, '2': 12, 'J': 10, 'Q': 10, 'K': 10 };
@@ -150,25 +155,15 @@ Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".
       const clean = code.trim().toUpperCase();
       const rank = clean.slice(0, -1);
       const suit = clean.slice(-1);
-      
       const val = CARD_VALUES[rank];
       if (!val || !['C', 'Q', 'F', 'P'].includes(suit)) return null;
-
-      return {
-        code: `${rank}${suit}`,
-        rank,
-        suit,
-        val,
-        primiera: PRIMIERA_POINTS[rank] || 0
-      };
+      return { code: `${rank}${suit}`, rank, suit, val, primiera: PRIMIERA_POINTS[rank] || 0 };
     }
 
-    // Regola ufficiale Scopa: se c'è una carta singola dello stesso valore, è OBBLIGATORIO prendere la singola
+    // Regola ufficiale di presa: se c'è una carta singola dello stesso valore, è OBBLIGATORIO prendere la singola
     function getLegalTakes(card, table) {
       const singleMatch = table.filter(t => t.val === card.val);
-      if (singleMatch.length > 0) {
-        return singleMatch.map(t => [t]);
-      }
+      if (singleMatch.length > 0) return singleMatch.map(t => [t]);
 
       const results = [];
       function findCombos(startIndex, currentSum, currentCombo) {
@@ -187,109 +182,118 @@ Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".
       return results;
     }
 
-    // Motore decisionale Professionista
-    function proEngine(handCards, tableCards) {
-      if (!handCards || handCards.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata in mano" };
-      
-      const hand = handCards.map(parseCard).filter(Boolean);
-      const table = tableCards.map(parseCard).filter(Boolean);
+    // MOTORE SCIENTIFICO COOPERATIVO (Teoria Scopone & Scopa Professionale)
+    function proMasterEngine(activeHandRaw, partnerHandRaw, tableRaw, activePlayerName) {
+      const activeHand = activeHandRaw.map(parseCard).filter(Boolean);
+      const partnerHand = partnerHandRaw.map(parseCard).filter(Boolean);
+      const table = tableRaw.map(parseCard).filter(Boolean);
 
-      if (hand.length === 0) return { card: "N/D", desc: "Formato carte non valido" };
+      if (activeHand.length === 0) return { card: "N/D", desc: "Nessuna carta rilevata per la mano attiva" };
 
       let bestOption = null;
-      let highestScore = -99999;
+      let highestScore = -999999;
 
-      for (const card of hand) {
+      for (const card of activeHand) {
         const takes = getLegalTakes(card, table);
 
         if (takes.length > 0) {
-          // Opzioni con presa
           for (const take of takes) {
-            let score = 100;
+            let score = 150;
             let notes = [];
 
-            // 1. Scopa pulita
+            // 1. SCOPA: Priorità assoluta se pulisce tutto
             if (take.length === table.length) {
-              score += 2000;
+              score += 3000;
               notes.push("⭐ SCOPA!");
             }
 
-            // 2. Cattura o giocata del Settebello (7Q)
+            // 2. SETTEBELLO (7Q): Peso capitale
             const is7Q = (c) => c.rank === '7' && c.suit === 'Q';
             if (is7Q(card) || take.some(is7Q)) {
-              score += 900;
+              score += 1200;
               notes.push("Cattura Settebello (7Q)");
             }
 
-            // 3. Punteggio Primiera (7 > 6 > A > 5 > 4...)
-            const totalPrimiera = take.reduce((acc, c) => acc + c.primiera, 0) + card.primiera;
-            score += totalPrimiera * 5;
+            // 3. PRIMIERA: Ponderata (i 7 e i 6 valgono più del doppio delle figure)
+            const primieraGained = take.reduce((acc, c) => acc + c.primiera, 0) + card.primiera;
+            score += primieraGained * 6;
 
-            // 4. Denari/Quadri (Q)
+            // 4. DENARI/QUADRI (Q): Conta per il punto di semi
             const quadCount = take.filter(c => c.suit === 'Q').length + (card.suit === 'Q' ? 1 : 0);
-            score += quadCount * 30;
+            score += quadCount * 40;
 
-            // 5. Volume carte
-            score += (take.length + 1) * 12;
+            // 5. VOLUME CARTE
+            score += (take.length + 1) * 15;
 
             if (score > highestScore) {
               highestScore = score;
               const takeStr = take.map(t => t.code).join('+');
               bestOption = {
                 card: card.code,
-                desc: notes.length > 0 ? `${notes.join(' - ')} (prende ${takeStr})` : `Prende ${takeStr} (Primiera/Carte)`
+                desc: notes.length > 0 ? `${notes.join(' - ')} (prende ${takeStr})` : `Prende ${takeStr} (Priorità Primiera/Semi)`
               };
             }
           }
         } else {
-          // Nessuna presa: scarto strategico
+          // OPZIONE SCARTO STRATEGICO (Regole dei Maestri)
           let score = 0;
           let notes = [];
 
-          // MAI buttare il Settebello a terra
-          if (card.rank === '7' && card.suit === 'Q') {
-            score -= 3000;
-          }
+          // MAI scartare a terra il Settebello
+          if (card.rank === '7' && card.suit === 'Q') score -= 5000;
+          
+          // Preserva i 7 e i 6 degli altri semi per la Primiera
+          score -= (card.primiera * 10);
 
-          // Conserva i 7 e i 6 di altri semi per la primiera
-          score -= (card.primiera * 8);
-
-          // Prediligi lo scarto delle figure (valgono solo 10 di primiera)
+          // Prediligi scartare le figure (valgono solo 10 di primiera, difficili da accoppiare)
           if (['K', 'Q', 'J'].includes(card.rank)) {
-            score += 45;
+            score += 50;
           }
 
-          // Calcolo rischio Scopa per l'avversario
           const currentTableSum = table.reduce((acc, c) => acc + c.val, 0);
           const resultingSum = currentTableSum + card.val;
-          if (resultingSum <= 10) {
-            score -= 150; // Pericolo scopa con carta singola
-            notes.push(`Attenzione: lascia terra a ${resultingSum}`);
+
+          // COOPERAZIONE DIRETTA CON IL COMPAGNO (Assist)
+          const partnerCanTakeSum = partnerHand.some(pc => pc.val === resultingSum);
+          const partnerHasMatchingValue = partnerHand.some(pc => pc.val === card.val);
+
+          if (partnerCanTakeSum && resultingSum <= 10) {
+            // Se scartando questa carta la somma a terra diventa pari a una carta che ha il compagno
+            score += 220;
+            notes.push(`Assist perfetto: apparecchia il tavolo a ${resultingSum} per ${activePlayerName === 'SUD' ? 'Nord' : 'Sud'}`);
+          } else if (table.length === 0 && partnerHasMatchingValue) {
+            score += 180;
+            notes.push(`Apertura coordinata: il compagno ha la coppia di riscontro (${card.rank})`);
+          } else if (resultingSum <= 10) {
+            // Lascia a terra una somma facile da pulire per l'avversario intermedio (Est o Ovest)
+            score -= 180;
+            notes.push(`Pericolo: lascia terra a ${resultingSum} (rischio scopa nemica)`);
           } else {
-            score += 30; // Scopa diretta impossibile
-            notes.push(`Scarto sicuro (terra a ${resultingSum} > 10)`);
+            score += 45;
+            notes.push(`Scarto difensivo sicuro (terra a ${resultingSum} > 10)`);
           }
 
           if (score > highestScore) {
             highestScore = score;
             bestOption = {
               card: card.code,
-              desc: notes.length > 0 ? notes.join(' - ') : "Scarto difensivo"
+              desc: notes.length > 0 ? notes.join(' - ') : "Scarto ragionato di contenimento"
             };
           }
         }
       }
 
-      return bestOption || { card: hand[0].code, desc: "Scarto standard" };
+      return bestOption || { card: activeHand[0].code, desc: "Scarto standard" };
     }
 
     const video = document.getElementById('video');
     const canvasUpload = document.getElementById('canvas-upload');
     const btnAction = document.getElementById('btn-action');
     const decisionEl = document.getElementById('decision');
-    const statusBadgeEl = document.getElementById('status-badge');
+    const activePlayerEl = document.getElementById('active-player');
     const tacticBoxEl = document.getElementById('tactic-box');
-    const pillHand = document.getElementById('pill-hand');
+    const pillNord = document.getElementById('pill-nord');
+    const pillSud = document.getElementById('pill-sud');
     const pillTable = document.getElementById('pill-table');
     const apiModal = document.getElementById('api-modal');
     const apiKeyInput = document.getElementById('api-key-input');
@@ -326,7 +330,7 @@ Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".
 
     btnAction.onclick = async () => {
       btnAction.disabled = true;
-      statusBadgeEl.innerText = "LETTURA AI...";
+      activePlayerEl.innerText = "CALCOLO MASTER...";
       decisionEl.innerText = "...";
       decisionEl.style.color = "#facc15";
 
@@ -334,10 +338,10 @@ Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
         
-        const cropW = srcWidth * 0.82;
-        const cropH = srcHeight * 0.86;
-        const cropX = srcWidth * 0.09;
-        const cropY = srcHeight * 0.07;
+        const cropW = srcWidth * 0.78;
+        const cropH = srcHeight * 0.94;
+        const cropX = srcWidth * 0.11;
+        const cropY = srcHeight * 0.03;
 
         const targetWidth = 1000;
         canvasUpload.width = targetWidth;
@@ -348,7 +352,7 @@ Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvasUpload.width, canvasUpload.height);
         
-        const base64Image = canvasUpload.toDataURL('image/jpeg', 0.75).split(',')[1];
+        const base64Image = canvasUpload.toDataURL('image/jpeg', 0.76).split(',')[1];
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
@@ -366,10 +370,12 @@ Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".
               responseSchema: {
                 type: "OBJECT",
                 properties: {
-                  mie_carte: { type: "ARRAY", items: { type: "STRING" } },
-                  tavolo: { type: "ARRAY", items: { type: "STRING" } }
+                  mano_nord: { type: "ARRAY", items: { type: "STRING" } },
+                  mano_sud: { type: "ARRAY", items: { type: "STRING" } },
+                  tavolo: { type: "ARRAY", items: { type: "STRING" } },
+                  tocca_a: { type: "STRING", enum: ["SUD", "NORD"] }
                 },
-                required: ["mie_carte", "tavolo"]
+                required: ["mano_nord", "mano_sud", "tavolo", "tocca_a"]
               },
               thinkingConfig: { thinkingLevel: "low" }
             }
@@ -383,23 +389,29 @@ Formato codici: Valore + Seme (MAIUSCOLI). Esempi: "7Q", "AC", "5F", "KP", "2Q".
         if (!rawText) throw new Error("Risposta vuota");
 
         const parsed = JSON.parse(rawText);
-        const myCards = parsed.mie_carte || [];
+        const nordCards = parsed.mano_nord || [];
+        const sudCards = parsed.mano_sud || [];
         const tableCards = parsed.tavolo || [];
+        const activeTurn = parsed.tocca_a || "SUD";
 
-        pillHand.innerText = `Mano: ${myCards.join(' ')}`;
-        pillTable.innerText = `Tavolo: ${tableCards.join(' ')}`;
+        pillNord.innerText = `Nord: ${nordCards.join(' ')}`;
+        pillSud.innerText = `Sud: ${sudCards.join(' ')}`;
+        pillTable.innerText = `Terra: ${tableCards.join(' ')}`;
 
-        const best = proEngine(myCards, tableCards);
+        const activeHand = activeTurn === "NORD" ? nordCards : sudCards;
+        const partnerHand = activeTurn === "NORD" ? sudCards : nordCards;
 
-        decisionEl.innerText = `GIOCA: ${best.card}`;
+        const best = proMasterEngine(activeHand, partnerHand, tableCards, activeTurn);
+
+        decisionEl.innerText = `${activeTurn}: ${best.card}`;
         decisionEl.style.color = "#10b981";
-        statusBadgeEl.innerText = "PRONTO";
-        tacticBoxEl.innerHTML = `<b>Mossa Pro:</b> ${best.desc}`;
+        activePlayerEl.innerText = `TURNO ${activeTurn}`;
+        tacticBoxEl.innerHTML = `<b>Mossa Maestro:</b> ${best.desc}`;
 
       } catch (err) {
         decisionEl.innerText = "ERRORE";
         decisionEl.style.color = "#ef4444";
-        statusBadgeEl.innerText = "FALLITO";
+        activePlayerEl.innerText = "FALLITO";
         tacticBoxEl.innerText = err.message;
       } finally {
         btnAction.disabled = false;
