@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Scopone 4 in 2 - Master Solver</title>
+  <title>Scopone 4 in 2 - Chitarrella Grandmaster</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: #0b0f19; color: #fff; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -11,7 +11,6 @@
     #camera-container { flex: 1 1 auto; min-height: 0; position: relative; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
     
-    /* Overlay calibrato esattamente a 35 cm dal monitor */
     #overlay-box { 
       position: absolute; 
       border: 2px dashed #38bdf8; 
@@ -139,13 +138,13 @@
       <div id="active-player">STANDBY</div>
     </div>
 
-    <div id="tactic-box">NUOVA SMAZZATA al round 1, poi scatta con il telecomando quando tocca a te.</div>
+    <div id="tactic-box">NUOVA SMAZZATA al primo turno, poi scatta col telecomando.</div>
 
     <div class="state-grid">
       <div class="pill" id="pill-nord">Nord: -</div>
       <div class="pill" id="pill-sud">Sud: -</div>
       <div class="pill pill-full" id="pill-table">Terra: -</div>
-      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Carte Nemici: 20/20 note</div>
+      <div class="pill pill-full" id="pill-tracker" style="color: #38bdf8;">Nemici: 20 carte ignote da dedurre</div>
     </div>
 
     <div class="action-row">
@@ -157,47 +156,40 @@
   <canvas id="canvas-upload" style="display: none;"></canvas>
 
   <script>
-    const SYSTEM_PROMPT = `Sei il Campione Mondiale e Grande Maestro di Scopone Scientifico. Mi assisti in una partita 4 in 2 (io controllo SUD e NORD, l'avversario controlla EST e OVEST).
+    const SYSTEM_PROMPT = `Sei il Grande Maestro e Campione del Mondo di Scopone Scientifico a 40 carte francesi.
+Assisti il giocatore in modalita 4 in 2 (controlla SUD e NORD contro EST e OVEST).
 
-REGOLE DEL TAVOLO (MAZZO FRANCESE DA 40 CARTE, SENZA 8, 9, 10):
-- Valori: Asso=1, 2..7 valore nominale, J (Fante)=8, Q (Donna)=9, K (Re)=10.
-- Semi: C (Cuori), Q (Quadri/Denari), F (Fiori), P (Picche).
-- PRESA SINGOLA OBBLIGATORIA: Se giochi una carta di valore X e a terra c'è sia una carta singola X sia una combinazione la cui somma fa X, SEI OBBLIGATO a prendere la carta singola.
-- NESSUN OBBLIGO DI PRESA: Sono libero di giocare qualsiasi carta ho in mano (posso scartare anche se ho una presa).
-- Punti classici: Carte (21+), Quadri (6+), Settebello (7Q), Primiera (7 > 6 > A), Scope.
+REGOLE TASSATIVE:
+1. Valori: A=1, 2..7 nominali, J (Fante)=8, Q (Donna)=9, K (Re)=10.
+2. Semi: C (Cuori), Q (Quadri/Denari), F (Fiori), P (Picche).
+3. PRESA SINGOLA OBBLIGATORIA: se giochi X e a terra c'e sia un X singolo sia una somma X, DEVI prendere il singolo.
+4. NESSUN OBBLIGO DI PRESA DA MANO: puoi giocare qualsiasi carta hai in mano, ma se giochi una carta che fa presa, il software Sisal prende automaticamente.
+5. Punti: Carte (21+), Quadri (6+), Settebello (7Q), Primiera (7 > 6 > A), Scope.
 
-IDENTIFICAZIONE TURNO ATTIVO ("tocca_a"):
-- Controlla i box "(ospite ...)" sopra Nord e sotto Sud:
-  * Quello ATTIVO NON È VERDE (è arancione o giallo lampeggiante, con timer o carta alzata).
-  * Se in alto non è verde -> "NORD". Se in basso non è verde -> "SUD".
+EQUAZIONE DI BILANCIO PRESE NEMICHE:
+Confronta il tavolo attuale con lo stato precedente descritto nel testo:
+- Se mancano carte a terra, deduci la carta giocata dal nemico (carta singola o somma <= 10).
+- Sottrai quel valore dal pool delle 20 carte nemiche iniziali.
 
-EQUAZIONE DI BILANCIO PRESE AVVERSARIE (MEMORIA STORICA):
-A ogni nuova immagine, confronta il tavolo attuale con quello dell'immagine precedente:
-1. Identifica le carte sparite a terra.
-2. Se sono sparite carte per effetto del turno avversario:
-   - Se è sparita una carta singola X -> l'avversario ha preso con un X da mano. Rimuovi un X dal pool nemico residuo.
-   - Se sono sparite più carte la cui somma fa S <= 10 -> l'avversario ha preso con una carta di valore S da mano. Rimuovi una carta di valore S dal pool nemico residuo.
-3. Tieni traccia rigorosa delle carte nemiche ancora vive (iniziano a 20).
+VINCOLO FERREO ANTI-SCOPA SUL RESIDUO:
+- Se una presa non fa scopa, calcola le carte RIMASTE a terra.
+- Se il residuo e una carta singola o somma <= 10, e i nemici hanno ancora carte vive di quel valore, QUELLA PRESA E VIETATA.
+- Preferisci scartare una carta che porti la terra a somma > 10 non pulibile con una sola carta.
 
-VINCOLO FERREO SUL RESIDUO ANTI-SCOPA:
-- Se valuti una presa che NON fa scopa, calcola esattamente cosa RIMANE a terra.
-- Se il residuo a terra è una carta singola o ha somma totale <= 10: controlla se i nemici hanno ancora nel loro pool la carta corrispondente per fare scopa.
-- SE I NEMICI POSSIEDONO QUELLA CARTA: QUELLA PRESA È FORMALMENTE VIETATA. Devi preferire un'altra carta o uno scarto che porti la somma del tavolo a un valore > 10 non prendibile in colpo singolo.
+STRATEGIA 4 IN 2:
+- Tra SUD e NORD gioca un avversario.
+- Puoi preparare il tavolo per il compagno SOLO se il valore lasciato a terra e assente dalla mano dell'avversario intermedio.
 
-STRATEGIA A CATENA (Mano A -> Nemico -> Mano B):
-- Tra la mano attiva e il tuo alleato gioca un avversario.
-- Puoi preparare il tavolo per il compagno SOLO se il valore o la somma lasciata è totalmente assente dalle carte in possesso dell'avversario intermedio.
-
-Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
+Rispondi con un JSON valido:
 {
   "mano_nord": ["KC", "4Q", ...],
   "mano_sud": ["7Q", "AP", ...],
   "tavolo": ["3C", ...],
   "tocca_a": "SUD" oppure "NORD",
   "carta_consigliata": "7Q",
-  "dettaglio": "Prende 7C a terra (Residuo pulito)",
-  "motivo": "Spiegazione logica stringente in una riga",
-  "nemici_vivi": "Conteggio sintetico (es. 16/20 rimasti, 7Q nostro, nemici hanno ancora due 7)"
+  "dettaglio": "Prende 7C (Residuo pulito)",
+  "motivo": "Spiegazione tattica stringente in una riga",
+  "nemici_vivi": "Sintesi (es. 14 rimasti, 7Q nostro, nemici hanno un 7 e due Re)"
 }`;
 
     const video = document.getElementById('video');
@@ -216,11 +208,11 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
     const saveKeyBtn = document.getElementById('save-key-btn');
 
     let apiKey = localStorage.getItem('GEMINI_API_KEY') || '';
-    let chatHistory = [];
+    let textHistory = [];
     let turnCount = 0;
 
     function resetSession() {
-      chatHistory = [];
+      textHistory = [];
       turnCount = 0;
       decisionEl.innerText = "PRONTO";
       decisionEl.style.color = "#10b981";
@@ -228,8 +220,8 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
       pillNord.innerText = "Nord: -";
       pillSud.innerText = "Sud: -";
       pillTable.innerText = "Terra: -";
-      pillTracker.innerText = "Carte Nemici: 20/20 note";
-      tacticBoxEl.innerText = "Mazzo resettato. Fai il primo scatto a carte appena distribuite.";
+      pillTracker.innerText = "Nemici: 20 carte ignote da dedurre";
+      tacticBoxEl.innerText = "Mazzo resettato. Fai il primo scatto all'avvio della smazzata.";
     }
 
     btnReset.onclick = resetSession;
@@ -272,7 +264,6 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
         const srcWidth = video.videoWidth;
         const srcHeight = video.videoHeight;
         
-        // Crop ottimizzato per 35 cm dal monitor
         const cropW = srcWidth * 0.86;
         const cropH = srcHeight * 0.68;
         const cropX = srcWidth * 0.07;
@@ -289,17 +280,17 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
         
         const base64Image = canvasUpload.toDataURL('image/jpeg', 0.92).split(',')[1];
 
-        // Costruisce il messaggio per la sessione progressiva
-        const userTurnMessage = {
-          role: "user",
-          parts: [
-            { text: `Turno ${turnCount + 1}. Analizza la situazione, deduci le prese nemiche rispetto al turno precedente e fornisci la mossa ottimale.` },
-            { inlineData: { mimeType: "image/jpeg", data: base64Image } }
-          ]
-        };
-
-        // Aggiunge allo storico
-        chatHistory.push(userTurnMessage);
+        // Costruiamo la richiesta: cronologia leggera (solo testo) + SOLO L'IMMAGINE ATTUALE
+        const contentsPayload = [
+          ...textHistory,
+          {
+            role: "user",
+            parts: [
+              { text: `Turno ${turnCount + 1}. Analizza la nuova foto, deduci le carte giocate dai nemici rispetto all'ultimo turno e fornisci la mossa ottimale.` },
+              { inlineData: { mimeType: "image/jpeg", data: base64Image } }
+            ]
+          }
+        ];
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
@@ -308,7 +299,7 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
             systemInstruction: {
               parts: [{ text: SYSTEM_PROMPT }]
             },
-            contents: chatHistory,
+            contents: contentsPayload,
             generationConfig: {
               responseMimeType: "application/json",
               thinkingConfig: { thinkingLevel: "low" }
@@ -320,13 +311,7 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
         if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
 
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) throw new Error("Risposta vuota dal modello");
-
-        // Salva la risposta del modello nella chat history per preservare la memoria al turno successivo
-        chatHistory.push({
-          role: "model",
-          parts: [{ text: rawText }]
-        });
+        if (!rawText) throw new Error("Risposta vuota");
 
         const parsed = JSON.parse(rawText);
         const nordCards = parsed.mano_nord || [];
@@ -337,6 +322,16 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
         const detail = parsed.dettaglio || "";
         const reason = parsed.motivo || "";
         const enemyTracker = parsed.nemici_vivi || "";
+
+        // Aggiorna lo storico solo testualmente per non appesantire le chiamate successive
+        textHistory.push({
+          role: "user",
+          parts: [{ text: `Stato al Turno ${turnCount + 1}: Nord=[${nordCards.join(',')}], Sud=[${sudCards.join(',')}], Tavolo=[${tableCards.join(',')}], Turno=${activeTurn}` }]
+        });
+        textHistory.push({
+          role: "model",
+          parts: [{ text: rawText }]
+        });
 
         turnCount++;
 
@@ -355,10 +350,6 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
         decisionEl.style.color = "#ef4444";
         activePlayerEl.innerText = "FALLITO";
         tacticBoxEl.innerText = err.message;
-        // Rimuove l'ultimo messaggio non riuscito per non corrompere la cronologia
-        if (chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === "user") {
-          chatHistory.pop();
-        }
       } finally {
         btnAction.disabled = false;
       }
@@ -366,6 +357,11 @@ Rispondi ESCLUSIVAMENTE con un JSON con questi campi:
 
     btnAction.onclick = executeCapture;
 
-    // Telecomando Bluetooth
     window.addEventListener('keydown', (e) => {
-      if (
+      if (apiModal.style.display !== 'none') return;
+      e.preventDefault();
+      executeCapture();
+    });
+  </script>
+</body>
+</html>
